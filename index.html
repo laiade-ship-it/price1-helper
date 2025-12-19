@@ -1,78 +1,211 @@
-async function performOCR(input) {
-    if (!input.files || !input.files[0]) return;
-    const status = document.getElementById('ocr-status');
-    status.innerText = "⌛ 辨識中...";
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>價格計算小幫手 - 語意強化版</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        :root { --primary-color: #4a90e2; --bg-color: #f5f7fa; --save-color: #27ae60; --text-dark: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 420px; }
+        h2 { text-align: center; color: var(--text-dark); margin-top: 0; }
+        .ocr-section { background: #fffbe6; border: 1px dashed #ffe58f; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px; }
+        #ocr-status { font-size: 13px; color: #856404; display: block; margin-top: 8px; font-weight: bold; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; color: #666; font-size: 14px; font-weight: 600; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; transition: border 0.3s; }
+        input:focus { border-color: var(--primary-color); outline: none; }
+        .history-tip { font-size: 12px; color: #e67e22; margin-top: 4px; min-height: 18px; }
+        .result-box { background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 10px; text-align: center; margin: 20px 0; }
+        .total-label { font-size: 14px; color: #0050b3; margin-bottom: 5px; }
+        .total-amount { font-size: 32px; font-weight: 800; color: #0050b3; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 10px; transition: opacity 0.2s; }
+        .btn-save { background-color: var(--save-color); color: white; }
+        .btn-reset { background-color: #f0f0f0; color: #666; }
+        button:active { opacity: 0.8; }
+    </style>
+</head>
+<body>
 
-    try {
-        const r = await Tesseract.recognize(input.files[0], 'chi_tra+eng');
-        const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+<div class="container">
+    <h2>💰 價格計算小幫手</h2>
 
-        let priceCandidates = [];
-        let nameBuffer = [];
-        let stopNameMerging = false;
+    <div class="ocr-section">
+        <label style="color: #856404;">📷 拍攝標籤辨識名稱與價格</label>
+        <input type="file" id="ocr-upload" accept="image/*" onchange="performOCR(this)">
+        <span id="ocr-status">支援 好市多與各類標籤</span>
+    </div>
 
-        // --- 屬性排除正則 (數字+單位)
-        const attributeRegex = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X|pc|pack)/gi;
-        const modelNoiseRegex = /\b[a-z]+\d+|\d+[a-z]+\b/gi;
+    <div class="input-group">
+        <label>商品名稱</label>
+        <input type="text" id="itemName" placeholder="辨識結果將自動填入" oninput="updateHistory()">
+        <div id="history-box" class="history-tip"></div>
+    </div>
 
-        // 價格語意正則
-        const semanticPriceRegex = /(?:[$¥]|NT\$|特價|售價|原價|金額|總計|Total)[:：\s]*([\d,]{1,7}(?:\.\d{1,2})?)/gi;
+    <div style="display: flex; gap: 10px;">
+        <div class="input-group" style="flex: 2;">
+            <label>單價 (元)</label>
+            <input type="number" id="price" placeholder="0" oninput="calculate()">
+        </div>
+        <div class="input-group" style="flex: 1;">
+            <label>數量</label>
+            <input type="number" id="count" value="1" oninput="calculate()">
+        </div>
+    </div>
 
-        const blacklist = ['公司', '地址', '保存', '日期', '有效', '編號', 'No', '產地', '網址', '總計', 'Total'];
+    <div class="result-box">
+        <div class="total-label">預算總計</div>
+        <div class="total-amount" id="total">$ 0</div>
+    </div>
 
-        lines.forEach(line => {
-            // --- A. 先剔除屬性單位與型號干擾 ---
-            let cleanLine = line.replace(attributeRegex, '[ATTR]').replace(modelNoiseRegex, '');
+    <button class="btn-save" onclick="saveRecord()">✅ 儲存此筆紀錄</button>
+    <button class="btn-reset" onclick="resetForm()">重設內容</button>
+</div>
 
-            // --- B. 價格抓取 ---
-            const hasPriceKeyword = /[$¥]|NT\$|特價|售價|原價|金額|總計|Total/i.test(line);
-            if (hasPriceKeyword) {
+<script>
+    // 初始化本地資料庫
+    let db = JSON.parse(localStorage.getItem('priceRecords')) || [];
+
+    // --- 核心 OCR 解析邏輯 ---
+    async function performOCR(input) {
+        if (!input.files || !input.files[0]) return;
+        const status = document.getElementById('ocr-status');
+        status.innerText = "⌛ 辨識中...請稍候...";
+        
+        try {
+            // 使用中英混合模型
+            const r = await Tesseract.recognize(input.files[0], 'chi_tra+eng');
+            const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            let priceCandidates = [];
+            let nameBuffer = [];
+            let stopNameMerging = false;
+
+            // 定義正規表達式實體
+            const attrRegex = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X|pc|pack)/gi;
+            const modelNoiseRegex = /\b[a-z]+\d+|\d+[a-z]+\b/gi;
+            const semanticPriceRegex = /(?:[$¥]|NT\$|特價|售價|原價|金額|總計|Total)[:：\s]*([\d,]{1,7}(?:\.\d{1,2})?)/gi;
+            const blacklist = ['公司', '地址', '保存', '日期', '有效', '編號', 'No', '產地', '網址'];
+
+            lines.forEach(line => {
+                // 1. 語意判定
+                const hasPriceKeyword = /[$¥]|NT\$|特價|售價|原價|金額|總計|Total/i.test(line);
+                const hasAttribute = attrRegex.test(line);
+
+                // 2. 價格解析：語意先行
+                let foundPriceInLine = false;
+                semanticPriceRegex.lastIndex = 0; 
                 let match;
-                while ((match = semanticPriceRegex.exec(cleanLine)) !== null) {
+                while ((match = semanticPriceRegex.exec(line)) !== null) {
                     const val = parseFloat(match[1].replace(/,/g, ''));
-                    let score = 100;
-                    if (/特價|Total|[$¥]/i.test(match[0])) score += 200;
-                    if (/原價/i.test(match[0])) score -= 50;
-                    priceCandidates.push({ val, score });
+                    if (val > 0) {
+                        let score = 100;
+                        if (/特價|Total|[$¥]/i.test(match[0])) score += 200; // 高信度關鍵字
+                        if (/原價/i.test(match[0])) score -= 50;           // 原價權重較低
+                        priceCandidates.push({ val, score });
+                        foundPriceInLine = true;
+                    }
                 }
-            }
 
-            // fallback：孤立數字，但跳過被替換的屬性 [ATTR]
-            if (priceCandidates.length === 0) {
-                const isolatedNumbers = cleanLine.match(/(?:^|\s)(\d{1,5})(?:\s|$)/g);
-                if (isolatedNumbers) {
-                    isolatedNumbers.forEach(numStr => {
-                        if (numStr.includes('[ATTR]')) return; // 排除屬性
-                        priceCandidates.push({ val: parseFloat(numStr.trim()), score: 50 });
-                    });
+                // 3. Fallback: 必須是語意行且「完全沒有屬性單位」干擾才抓孤立數字
+                if (!foundPriceInLine && hasPriceKeyword && !hasAttribute) {
+                    const isolated = line.match(/(?:\s|^)(\d{1,5})(?:\s|$)/);
+                    if (isolated) {
+                        priceCandidates.push({ val: parseFloat(isolated[1]), score: 50 });
+                    }
                 }
-            }
 
-            // --- C. 品名合併邏輯 ---
-            if (!stopNameMerging) {
-                const isBlacklisted = blacklist.some(word => line.includes(word));
-                const textOnly = cleanLine.replace(/[\d\s,.$¥NT:：*＊\-\/]/g, '');
-                const ratio = line.length > 0 ? textOnly.length / line.length : 0;
+                // 4. 品名合併邏輯：實體排除並保留剩餘文字
+                if (!stopNameMerging) {
+                    const isBlacklisted = blacklist.some(word => line.includes(word));
+                    
+                    // 清理名稱：移除屬性、型號、以及已知的價格字串，但不毀損一般文字
+                    let cleanForName = line
+                        .replace(attrRegex, '')
+                        .replace(semanticPriceRegex, '')
+                        .replace(modelNoiseRegex, '')
+                        .trim();
 
-                // 停止條件：遇到價格行或黑名單或長數字行
-                if (hasPriceKeyword || isBlacklisted || /\d{10,}/.test(line)) {
-                    stopNameMerging = true;
-                } else if (ratio > 0.4 && line.length > 1) {
-                    nameBuffer.push(textOnly.trim());
+                    // 終止條件：遇到明確價格標籤、黑名單或長數字(條碼)
+                    if (hasPriceKeyword || isBlacklisted || /\d{10,}/.test(line)) {
+                        if (nameBuffer.length > 0) stopNameMerging = true;
+                    } else if (cleanForName.length > 1) {
+                        // 確保文字比例達標 (避免抓到純符號)
+                        const textRatio = cleanForName.replace(/[^\u4e00-\u9fa5a-zA-Z]/g, '').length / cleanForName.length;
+                        if (textRatio > 0.2) nameBuffer.push(cleanForName);
+                    }
                 }
-            }
-        });
+            });
 
-        // --- D. 輸出結果 ---
-        const bestPrice = priceCandidates.sort((a, b) => b.score - a.score)[0];
-        document.getElementById('price').value = bestPrice ? bestPrice.val : '';
-        document.getElementById('itemName').value = nameBuffer.join(' ');
-        status.innerText = "✅ 辨識完成";
-        calculate();
-        updateHistory();
+            // 輸出最高分價格
+            const bestPrice = priceCandidates.sort((a, b) => b.score - a.score)[0];
+            document.getElementById('price').value = bestPrice ? bestPrice.val : '';
+            
+            // 輸出合併品名
+            document.getElementById('itemName').value = nameBuffer.join(' ').trim();
 
-    } catch (e) {
-        status.innerText = "❌ 辨識失敗";
-        console.error(e);
+            status.innerText = "✅ 辨識完成";
+            calculate();
+            updateHistory();
+
+        } catch (e) {
+            status.innerText = "❌ 辨識失敗，請手動輸入";
+            console.error(e);
+        }
     }
-}
+
+    // 計算總計
+    function calculate() {
+        const p = document.getElementById('price').value;
+        const c = document.getElementById('count').value;
+        const total = (p && c) ? Math.round(p * c) : 0;
+        document.getElementById('total').innerText = '$ ' + total.toLocaleString();
+    }
+
+    // 儲存紀錄
+    function saveRecord() {
+        const name = document.getElementById('itemName').value;
+        const price = document.getElementById('price').value;
+        if (!name || !price) return alert("請填寫商品名稱與單價");
+
+        const record = {
+            name: name,
+            price: parseFloat(price),
+            date: new Date().toLocaleDateString()
+        };
+        db.push(record);
+        localStorage.setItem('priceRecords', JSON.stringify(db));
+        alert("已成功儲存至手機！");
+        resetForm();
+    }
+
+    // 歷史紀錄查詢提示
+    function updateHistory() {
+        const name = document.getElementById('itemName').value.trim();
+        const box = document.getElementById('history-box');
+        if (!name || name.length < 2) { box.innerHTML = ""; return; }
+
+        const matches = db.filter(r => r.name.includes(name));
+        if (matches.length > 0) {
+            const prices = matches.map(m => m.price);
+            box.innerHTML = `📍 歷史紀錄：$${Math.min(...prices)} ~ $${Math.max(...prices)}`;
+        } else {
+            box.innerHTML = "🔍 尚無歷史紀錄";
+        }
+    }
+
+    // 重設表單
+    function resetForm() {
+        document.getElementById('price').value = '';
+        document.getElementById('itemName').value = '';
+        document.getElementById('ocr-upload').value = '';
+        document.getElementById('count').value = '1';
+        document.getElementById('total').innerText = '$ 0';
+        document.getElementById('ocr-status').innerText = '支援 好市多與各類標籤';
+        document.getElementById('history-box').innerHTML = "";
+    }
+</script>
+
+</body>
+</html>
