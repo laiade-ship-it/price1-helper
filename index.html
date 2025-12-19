@@ -14,7 +14,7 @@
         label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
         .ocr-group { background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px dashed #ccc; margin-bottom: 15px; text-align: center; }
-        .history-info { font-size: 12px; color: #e67e22; margin-top: 5px; min-height: 20px; }
+        #ocr-status { font-size:12px; color:#666; display: block; margin-top: 5px; }
         .result-area { background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
         .result-value { font-size: 28px; font-weight: bold; color: var(--primary-color); }
         button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 10px; }
@@ -25,51 +25,31 @@
 
 <div class="container">
     <h2>💰 價格計算器</h2>
-
     <div class="ocr-group">
         <label>📷 拍照辨識名稱與價格</label>
         <input type="file" id="ocr-upload" accept="image/*" onchange="performOCR(this)">
-        <span id="ocr-status" style="font-size:12px; color:#666; display: block; margin-top: 5px;">支援 中/日/英</span>
+        <span id="ocr-status">支援 中/日/英</span>
     </div>
-
     <div class="input-group">
         <label>商品名稱</label>
-        <input type="text" id="itemName" placeholder="辨識結果會顯示於此" oninput="updateHistory()">
-        <div id="history-box" class="history-info"></div>
+        <input type="text" id="itemName" placeholder="自動合併名稱">
     </div>
-
-    <div class="input-group">
-        <label>購買商店名稱</label>
-        <input type="text" id="storeName" value="好市多">
-    </div>
-
     <div class="input-group">
         <label>單價 (元)</label>
-        <input type="number" id="price" placeholder="請輸入金額" oninput="calculate()">
+        <input type="number" id="price" placeholder="自動過濾容量與規格">
     </div>
-
     <div class="input-group">
         <label>數量</label>
         <input type="number" id="count" value="1" oninput="calculate()">
     </div>
-
     <div class="result-area">
         <div class="result-value" id="total">$ 0</div>
     </div>
-
     <button class="save-btn" onclick="saveRecord()">✅ 儲存此筆紀錄</button>
     <button onclick="resetForm()" style="background: #95a5a6;">重設內容</button>
 </div>
 
 <script>
-    let db = JSON.parse(localStorage.getItem('priceRecords')) || [];
-
-    function calculate() {
-        const p = document.getElementById('price').value;
-        const c = document.getElementById('count').value;
-        document.getElementById('total').innerText = (p && c) ? '$ ' + Math.round(p * c).toLocaleString() : '$ 0';
-    }
-
     async function performOCR(input) {
         if (!input.files || !input.files[0]) return;
         const status = document.getElementById('ocr-status');
@@ -79,38 +59,60 @@
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
             const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // 1. 價格處理：禁止切碎長數字 (解決 153702 問題)
+            // --- 價格辨識邏輯：排除屬性，優先語意 ---
             let priceCandidates = [];
-            // 只匹配獨立的 1-5 位數字，排除緊貼字母的型號
-            const strictPriceRegex = /(?:^|[\s$¥]|NT\$|價[:：])(\d{1,5}(?:[.,]\d{1,2})?)(?:\s|$)/i;
+            // 單位排除正則：匹配 數字+單位 (如 936ml, 500g, 2入)
+            const attributeRegex = /\d+\s?(ml|毫升|g|克|kg|公斤|入|pcs|pack|oz)/gi;
+            // 語意價格正則：帶符號或特定前綴的數字
+            const semanticPriceRegex = /([$¥]|NT\$|價[:：])\s?(\d{1,5}(?:[.,]\d{1,2})?)/gi;
+            // 純數字正則：獨立存在的 1-5 位數
+            const pureNumberRegex = /(?:\s|^)(\d{1,5})(?:\s|$)/g;
 
             lines.forEach(line => {
-                const match = line.match(strictPriceRegex);
-                if (match) {
-                    const val = parseFloat(match[1].replace(/,/g, ''));
-                    let score = /[$¥]|NT\$/i.test(line) ? 200 : 50;
-                    if (/特價|售價|優惠/i.test(line)) score += 100;
-                    if (/編號|No|碼|Tel|日期|202\d/i.test(line)) score -= 500;
-                    priceCandidates.push({ val, score });
+                // Step 1: 先標記並移除該行中的「屬性數值」(例如把 936ml 變成 [ATTR])
+                const cleanLine = line.replace(attributeRegex, '[ATTR]');
+                
+                // Step 2: 優先找「帶語意符號」的價格
+                let match;
+                while ((match = semanticPriceRegex.exec(line)) !== null) {
+                    priceCandidates.push({ 
+                        val: parseFloat(match[2].replace(/,/g, '')), 
+                        score: 300 // 最高優先級
+                    });
+                }
+
+                // Step 3: 若無語意符號，找「乾淨行」中的獨立純數字
+                if (priceCandidates.length === 0) {
+                    let pureMatch;
+                    while ((pureMatch = pureNumberRegex.exec(cleanLine)) !== null) {
+                        const val = parseFloat(pureMatch[1]);
+                        let score = 50;
+                        if (/特價|售價|優惠/i.test(line)) score += 100;
+                        if (/編號|No|碼|Tel|日期/i.test(line)) score -= 500;
+                        priceCandidates.push({ val, score });
+                    }
                 }
             });
+
             const bestPrice = priceCandidates.sort((a,b) => b.score - a.score)[0];
             if (bestPrice && bestPrice.score > -100) document.getElementById('price').value = bestPrice.val;
 
-            // 2. 名稱處理：合併相鄰行 (解決 KIRKLAND + 奶油 問題)
-            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', 'Tel', '成分', '網址'];
+            // --- 名稱辨識邏輯：區段連續合併 ---
+            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', '成分'];
             let nameBuffer = [];
             let stopMerging = false;
 
             for (let line of lines) {
                 if (stopMerging) break;
-                const isPriceLine = strictPriceRegex.test(line);
+                // 如果該行包含明確的語意價格，通常表示名稱區段結束
+                if (semanticPriceRegex.test(line)) { stopMerging = true; continue; }
+                
                 const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊\-/]/g, '');
                 const ratio = line.length > 0 ? textOnly.length / line.length : 0;
                 const isBlacklisted = blacklist.some(word => line.includes(word));
 
-                if (!isBlacklisted && !isPriceLine && ratio > 0.4 && line.length > 1) {
-                    nameBuffer.push(line.replace(/[$¥NT\d,.]+$/g, '').trim());
+                if (!isBlacklisted && ratio > 0.4 && line.length > 1) {
+                    nameBuffer.push(line.replace(/([$¥]|NT\$)\s?\d+/g, '').trim());
                 } else if (nameBuffer.length > 0) {
                     stopMerging = true;
                 }
@@ -119,32 +121,20 @@
             
             status.innerText = "✅ 辨識完成";
             calculate();
-            updateHistory();
         } catch (e) {
             status.innerText = "❌ 辨識失敗";
-            console.error(e);
         }
     }
 
-    function saveRecord() {
-        const name = document.getElementById('itemName').value;
-        const price = document.getElementById('price').value;
-        if (!name || !price) return alert("請輸入名稱與價格");
-        db.push({ name, price: parseFloat(price), date: new Date().toLocaleDateString() });
-        localStorage.setItem('priceRecords', JSON.stringify(db));
-        alert("儲存成功！");
-        resetForm();
+    function calculate() {
+        const p = document.getElementById('price').value;
+        const c = document.getElementById('count').value;
+        document.getElementById('total').innerText = (p && c) ? '$ ' + Math.round(p * c).toLocaleString() : '$ 0';
     }
 
-    function updateHistory() {
-        const name = document.getElementById('itemName').value.trim();
-        const box = document.getElementById('history-box');
-        if (!name) { box.innerHTML = ""; return; }
-        const matches = db.filter(r => r.name.includes(name));
-        if (matches.length > 0) {
-            const ps = matches.map(m => m.price);
-            box.innerHTML = `📍 歷史：$${Math.min(...ps)} ~ $${Math.max(...ps)}`;
-        } else { box.innerHTML = "🔍 尚無紀錄"; }
+    function saveRecord() {
+        alert("紀錄已儲存（測試用）");
+        resetForm();
     }
 
     function resetForm() {
