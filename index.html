@@ -31,14 +31,26 @@
         #store-tabs-container { margin-top: 25px; border-top: 2px solid #f0f0f0; padding-top: 20px; }
         .tab-headers { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
         .tab-headers::-webkit-scrollbar { display: none; }
-        .tab-btn { background: #eee; padding: 8px 16px; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 13px; font-weight: bold; flex-shrink: 0; transition: 0.2s; }
+        .tab-btn { background: #eee; padding: 8px 16px; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 13px; font-weight: bold; flex-shrink: 0; transition: 0.2s; position: relative; }
         .tab-btn.active { background: var(--primary); color: white; }
+
+        /* 提升點擊精準度的透明層 */
+        .action-icon {
+            display: inline-block;
+            padding: 8px 4px;
+            margin: -8px -4px;
+            cursor: pointer;
+            position: relative;
+            z-index: 2;
+            vertical-align: middle;
+        }
 
         /* 紀錄列表 */
         .record-item { background: #fff; padding: 14px; border-radius: 14px; margin-bottom: 10px; border: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
         .record-info b { display: block; font-size: 15px; margin-bottom: 2px; }
         .record-info small { color: #aaa; font-size: 11px; }
         .record-price { text-align: right; font-weight: 800; color: var(--primary); font-size: 18px; }
+        .item-action { cursor: pointer; padding: 10px 5px; margin: -10px -5px; display: inline-block; }
     </style>
 </head>
 <body>
@@ -94,7 +106,6 @@ function init() {
         storeData = JSON.parse(raw) || {};
         
         if (Array.isArray(storeData)) {
-            console.warn("偵測到舊資料格式，自動修復中...");
             storeData = {};
             localStorage.setItem('storeTabsData', JSON.stringify({}));
         }
@@ -120,7 +131,6 @@ async function performOCR(input) {
         let priceCandidates = [];
 
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計)[:：\s]*([\d,]{2,7})/i;
-        const barcodeRegex = /^\d{8,13}$/;
         const dateRegex = /202\d{1}/; 
 
         lines.forEach((line) => {
@@ -149,7 +159,6 @@ async function performOCR(input) {
         status.innerText = priceCandidates.length ? "✅ 辨識完成" : "⚠️ 未抓到價格，請手動輸入";
 
     } catch (e) {
-        console.error(e);
         status.innerText = "❌ 辨識失敗，請重試";
     } finally {
         if (worker) await worker.terminate();
@@ -179,7 +188,6 @@ function saveRecord() {
     
     renderTabs(store);
     resetForm();
-    alert("儲存成功！");
 }
 
 /* ------------------ 既有渲染邏輯 ------------------ */
@@ -200,8 +208,8 @@ function renderTabs(activeStore = null) {
     headers.innerHTML = storeNames.map(name => `
         <div class="tab-btn ${name === activeStore ? 'active' : ''}" onclick="renderTabs('${name.replace(/'/g, "\\'")}')">
             ${escapeHtml(name)}
-            ${name === activeStore ? `<span onclick="event.stopPropagation(); renameStore('${name.replace(/'/g, "\\'")}')" style="margin-left:8px;opacity:0.6;">✏️</span>` : ''}
-            ${name === activeStore ? `<span onclick="event.stopPropagation(); deleteStore('${name.replace(/'/g, "\\'")}')" style="margin-left:5px;opacity:0.6;">🗑️</span>` : ''}
+            ${name === activeStore ? `<span class="action-icon" onclick="event.stopPropagation(); renameStore('${name.replace(/'/g, "\\'")}')" style="margin-left:8px;opacity:0.6;">✏️</span>` : ''}
+            ${name === activeStore ? `<span class="action-icon" onclick="event.stopPropagation(); deleteStore('${name.replace(/'/g, "\\'")}')" style="margin-left:5px;opacity:0.6;">🗑️</span>` : ''}
         </div>
     `).join('');
 
@@ -213,8 +221,8 @@ function renderTabs(activeStore = null) {
             <div class="record-info">
                 <b>${escapeHtml(r.name)}</b>
                 <small>${r.date} · ${r.count}個 
-                    <span onclick="editItem('${activeStore.replace(/'/g, "\\'")}', ${actualIndex})" style="color:var(--primary);cursor:pointer;margin-left:10px;">[編輯]</span>
-                    <span onclick="deleteItem('${activeStore.replace(/'/g, "\\'")}', ${actualIndex})" style="color:var(--danger);cursor:pointer;margin-left:5px;">[刪除]</span>
+                    <span class="item-action" onclick="editItem('${activeStore.replace(/'/g, "\\'")}', ${actualIndex})" style="color:var(--primary);margin-left:10px;">[編輯]</span>
+                    <span class="item-action" onclick="deleteItem('${activeStore.replace(/'/g, "\\'")}', ${actualIndex})" style="color:var(--danger);margin-left:5px;">[刪除]</span>
                 </small>
             </div>
             <div class="record-price">$${(r.price * r.count).toLocaleString()}</div>
@@ -244,7 +252,6 @@ function clearData() {
     }
 }
 
-// ===== 新增功能：分頁重新命名 =====
 function renameStore(oldName) {
     const userInput = prompt("請輸入新的商店名稱：", oldName);
     if (userInput === null) return;
@@ -258,7 +265,6 @@ function renameStore(oldName) {
     renderTabs(newName);
 }
 
-// ===== 新增功能：分頁刪除 =====
 function deleteStore(storeName) {
     if (!confirm(`確定要刪除「${storeName}」整個商店的所有紀錄嗎？`)) return;
     delete storeData[storeName];
@@ -266,7 +272,6 @@ function deleteStore(storeName) {
     renderTabs();
 }
 
-// ===== 新增功能：品項編輯 =====
 function editItem(storeName, index) {
     const item = storeData[storeName][index];
     const nameInput = prompt("編輯商品名稱：", item.name);
@@ -285,7 +290,6 @@ function editItem(storeName, index) {
     renderTabs(storeName);
 }
 
-// ===== 新增功能：品項刪除 =====
 function deleteItem(storeName, index) {
     if (!confirm("確定要刪除此筆紀錄嗎？")) return;
     storeData[storeName].splice(index, 1);
