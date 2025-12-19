@@ -30,6 +30,17 @@
         .btn-save { background: #27ae60; color: white; margin-bottom: 10px; }
         .btn-reset { background: #f0f0f0; color: #888; }
         button:active { transform: scale(0.98); opacity: 0.9; }
+
+        /* --- 新增：商店分頁專用樣式 --- */
+        #store-tabs-container { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
+        .tab-headers { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; }
+        .tab-btn { background: #eee; border: 1px solid #ddd; padding: 8px 15px; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 13px; font-weight: bold; transition: 0.3s; }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .tab-contents { background: #fafafa; border-radius: 15px; padding: 15px; min-height: 100px; }
+        .record-item { background: white; border-radius: 10px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center; }
+        .record-info b { color: var(--text); font-size: 15px; }
+        .record-info span { color: #888; font-size: 12px; }
+        .record-price { text-align: right; color: #0050b3; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -42,6 +53,11 @@
         <p style="margin: 5px 0; font-weight: bold;">點擊拍攝/上傳標籤</p>
         <input type="file" id="ocr-upload" accept="image/*" onchange="performOCR(this)">
         <span id="ocr-status" class="ocr-status">支援 好市多、全聯、家樂福標籤</span>
+    </div>
+
+    <div class="input-group">
+        <label>🏪 商店名稱 (手動輸入)</label>
+        <input type="text" id="storeName" placeholder="例如：好市多、全聯..." style="background: #fffef0; border-color: #ffe58f;">
     </div>
 
     <div class="input-group">
@@ -68,20 +84,27 @@
 
     <button class="btn-save" onclick="saveRecord()">✅ 儲存此筆紀錄</button>
     <button class="btn-reset" onclick="resetForm()">重設內容</button>
+
+    <div id="store-tabs-container">
+        <label style="color: var(--primary); font-size: 15px; font-weight: bold;">📊 分頁瀏覽紀錄 (按商店分類)</label>
+        <div id="tab-headers" class="tab-headers"></div>
+        <div id="tab-contents" class="tab-contents"></div>
+    </div>
 </div>
 
 <script>
-    // 初始化本地紀錄
+    // 初始化本地紀錄 (保留原有 db 名稱)
     let db = JSON.parse(localStorage.getItem('shopRecords')) || [];
+    // 新增：商店分頁資料庫
+    let storeData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
 
-    // --- 核心 OCR 解析模組 ---
+    // --- 核心 OCR 解析模組 (嚴格保留原有邏輯) ---
     async function performOCR(input) {
         if (!input.files || !input.files[0]) return;
         const status = document.getElementById('ocr-status');
         status.innerText = "⌛ 辨識中...請保持網路暢通...";
 
         try {
-            // 使用中英混合語言模型
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+eng');
             const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
 
@@ -89,7 +112,6 @@
             let nameBuffer = [];
             let stopNameMerging = false;
 
-            // 定義正規表達式與排除名單
             const attrRegex = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X|pc|pack)/gi;
             const modelNoiseRegex = /\b[a-z]+\d+|\d+[a-z]+\b/gi;
             const semanticPriceRegex = /(?:[$¥]|NT\$|特價|售價|原價|金額|總計|Total)[:：\s]*([\d,]{1,7}(?:\.\d{1,2})?)/gi;
@@ -97,7 +119,6 @@
             const blacklist = ['公司', '地址', '保存', '日期', '有效', '編號', 'No', '產地', '網址', '電話', 'Tel', 'Ingredients'];
 
             for (let line of lines) {
-                // 重置全域正則狀態 (防止 lastIndex Bug)
                 attrRegex.lastIndex = 0;
                 semanticPriceRegex.lastIndex = 0;
                 fallbackNumberRegex.lastIndex = 0;
@@ -106,7 +127,6 @@
                 const hasAttribute = attrRegex.test(line);
                 let foundPriceInLine = false;
 
-                // A. 價格抓取：語意行優先
                 let sMatch;
                 while ((sMatch = semanticPriceRegex.exec(line)) !== null) {
                     const val = parseFloat(sMatch[1].replace(/,/g, ''));
@@ -118,7 +138,6 @@
                     }
                 }
 
-                // B. Fallback：只有具標籤、無單位干擾、且數字合理時才採計
                 if (!foundPriceInLine && hasPriceKeyword && !hasAttribute) {
                     let fMatch;
                     while ((fMatch = fallbackNumberRegex.exec(line)) !== null) {
@@ -127,17 +146,15 @@
                     }
                 }
 
-                // C. 品名合併邏輯
                 if (!stopNameMerging) {
                     const isBlacklisted = blacklist.some(word => line.includes(word));
-                    const isBarcode = /\d{7,}/.test(line); // 攔截 Costco 貨號或長條碼
+                    const isBarcode = /\d{7,}/.test(line);
 
                     if (isBlacklisted || isBarcode) {
                         if (nameBuffer.length > 0) stopNameMerging = true;
                         continue;
                     }
 
-                    // 清理當前行，保留有意義文字，移除屬性與價格
                     let cleanName = line
                         .replace(attrRegex, '')
                         .replace(semanticPriceRegex, '')
@@ -145,22 +162,17 @@
                         .replace(/[:：]/g, '')
                         .trim();
 
-                    // 計算文字比例以排除純雜訊
                     const textRatio = cleanName.replace(/[^\u4e00-\u9fa5a-zA-Z]/g, '').length / (cleanName.length || 1);
 
                     if (cleanName.length > 1 && textRatio > 0.2) {
                         nameBuffer.push(cleanName);
-                        // 如果這行已經帶有價格，通常代表品名區塊結束
                         if (hasPriceKeyword) stopNameMerging = true;
                     }
                 }
             }
 
-            // 選出最高分價格
             const best = priceCandidates.sort((a,b) => b.score - a.score)[0];
             document.getElementById('price').value = best ? best.val : '';
-            
-            // 合併品名 (確保不遺漏數字名稱如 3M)
             document.getElementById('itemName').value = nameBuffer.join(' ').trim();
 
             status.innerText = "✅ 辨識完成";
@@ -173,6 +185,7 @@
         }
     }
 
+    // --- 計算邏輯 (保留) ---
     function calculate() {
         const p = document.getElementById('price').value;
         const c = document.getElementById('count').value;
@@ -180,17 +193,78 @@
         document.getElementById('total').innerText = '$ ' + total.toLocaleString();
     }
 
+    // --- 儲存邏輯 (擴充新增功能，不改動原有邏輯) ---
     function saveRecord() {
         const name = document.getElementById('itemName').value;
         const price = document.getElementById('price').value;
+        const count = document.getElementById('count').value || 1;
+        const store = document.getElementById('storeName').value.trim() || "未分類商店";
+
         if (!name || !price) return alert("請填寫商品名稱與價格");
 
+        // 1. 保留原有歷史紀錄邏輯
         db.push({ name, price: parseFloat(price), date: new Date().toLocaleDateString() });
         localStorage.setItem('shopRecords', JSON.stringify(db));
-        alert("已儲存紀錄！");
+
+        // 2. 新增：商店分頁紀錄邏輯
+        const newRecord = {
+            name: name,
+            price: parseFloat(price),
+            count: parseInt(count),
+            date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        };
+
+        if (!storeData[store]) storeData[store] = [];
+        storeData[store].push(newRecord);
+        localStorage.setItem('storeTabsData', JSON.stringify(storeData));
+
+        alert("已儲存紀錄至「" + store + "」分頁！");
+        
+        // 3. 立即刷新分頁顯示並跳轉至該商店
+        renderTabs(store);
         resetForm();
     }
 
+    // --- 新增：分頁渲染功能 ---
+    function renderTabs(activeStore = null) {
+        const headers = document.getElementById('tab-headers');
+        const contents = document.getElementById('tab-contents');
+        headers.innerHTML = "";
+        
+        const storeNames = Object.keys(storeData);
+        if (storeNames.length === 0) {
+            contents.innerHTML = "<div style='color:#999; text-align:center; padding:20px;'>尚未有商店紀錄資料</div>";
+            return;
+        }
+
+        // 如果沒指定 activeStore，預設顯示最後一個儲存的商店
+        if (!activeStore) activeStore = storeNames[storeNames.length - 1];
+
+        storeNames.forEach(name => {
+            const btn = document.createElement('button');
+            btn.className = `tab-btn ${name === activeStore ? 'active' : ''}`;
+            btn.innerText = name;
+            btn.onclick = () => renderTabs(name);
+            headers.appendChild(btn);
+        });
+
+        // 渲染該商店內的商品列表 (由新到舊)
+        const records = storeData[activeStore] || [];
+        contents.innerHTML = records.slice().reverse().map(r => `
+            <div class="record-item">
+                <div class="record-info">
+                    <b>${r.name}</b><br>
+                    <span>${r.date}</span>
+                </div>
+                <div class="record-price">
+                    $${r.price.toLocaleString()} x ${r.count}<br>
+                    <small style="color:#0050b3">計 $${(r.price * r.count).toLocaleString()}</small>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // --- 歷史紀錄提示 (保留) ---
     function updateHistory() {
         const name = document.getElementById('itemName').value.trim();
         const box = document.getElementById('history-box');
@@ -205,6 +279,7 @@
         }
     }
 
+    // --- 重設表單 (保留並稍微優化商店欄位處理) ---
     function resetForm() {
         document.getElementById('price').value = '';
         document.getElementById('itemName').value = '';
@@ -213,7 +288,11 @@
         document.getElementById('total').innerText = '$ 0';
         document.getElementById('ocr-status').innerText = '支援 好市多與各類標籤';
         document.getElementById('history-box').innerText = "";
+        // 商店名稱欄位建議保留，方便使用者連續輸入同一家店的商品
     }
+
+    // 頁面載入時初始化渲染分頁
+    window.onload = () => renderTabs();
 </script>
 
 </body>
