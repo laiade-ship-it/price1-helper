@@ -13,16 +13,13 @@
         .input-group { margin-bottom: 12px; }
         label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        
         .ocr-group { background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px dashed #ccc; margin-bottom: 15px; text-align: center; }
         #store-tabs { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
         .tab { padding: 5px 12px; background: #eee; border-radius: 15px; font-size: 12px; white-space: nowrap; cursor: pointer; }
         .tab.active { background: var(--primary-color); color: white; }
-        
         .history-info { font-size: 12px; color: #e67e22; margin-top: 5px; min-height: 20px; }
         .result-area { background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
         .result-value { font-size: 28px; font-weight: bold; color: var(--primary-color); }
-        
         button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 10px; }
         .save-btn { background-color: var(--save-color) !important; }
     </style>
@@ -74,54 +71,53 @@
 <script>
     let db = JSON.parse(localStorage.getItem('priceRecords')) || [];
 
-    // 初始化載入分頁標籤
     window.onload = () => { renderTabs(); };
 
     function calculate() {
         const p = document.getElementById('price').value;
         const c = document.getElementById('count').value;
-        if (p && c) {
-            document.getElementById('total').innerText = '$ ' + Math.round(p * c).toLocaleString();
-        } else {
-            document.getElementById('total').innerText = '$ 0';
-        }
+        document.getElementById('total').innerText = (p && c) ? '$ ' + Math.round(p * c).toLocaleString() : '$ 0';
     }
 
-    // 【核心修正：OCR 解析邏輯】
+    // 【修改重點：優化 OCR 後處理判斷】
     async function performOCR(input) {
         if (!input.files || !input.files[0]) return;
         const status = document.getElementById('ocr-status');
-        status.innerText = "⌛ 辨識中...請稍候";
+        status.innerText = "⌛ 辨識中...";
         
         try {
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
-            const text = r.data.text;
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            const fullText = r.data.text;
+            const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // 1. 價格辨識邏輯 (處理符號與千分位)
+            // 1. 價格邏輯：找出所有數字項
             const priceRegex = /([$¥]|NT\$)?\s?(\d{1,3}(,\d{3})*(\.\d+)?|\d+(\.\d+)?)/gi;
-            const allMatches = text.match(priceRegex) || [];
+            const matches = fullText.match(priceRegex) || [];
             
-            let bestPrice = "";
-            for (let match of allMatches) {
-                let clean = match.replace(/[^\d.]/g, ''); // 只留數字與小數點
-                if (clean && !isNaN(clean) && parseFloat(clean) > 0) {
-                    bestPrice = clean;
-                    break; 
-                }
-            }
-            if (bestPrice) document.getElementById('price').value = bestPrice;
+            const priceCandidates = matches.map(m => ({
+                raw: m,
+                val: parseFloat(m.replace(/[^\d.]/g, '')),
+                hasSymbol: /[$¥]|NT\$/i.test(m)
+            })).filter(c => c.val > 0 && c.val < 30000); // 排除條碼級的大數字
 
-            // 2. 商品名稱辨識邏輯 (過濾掉純數字與價格行)
-            const nameLine = lines.find(l => {
-                const hasRealText = /[^\d\s,.$¥NT:：xX*＊]/.test(l); // 含有真正的文字
-                const isNotJustPrice = !/^[\d,.$¥\s]+$/.test(l);    // 不僅僅是價格組合
-                return hasRealText && isNotJustPrice;
+            // 優先選有符號的，否則選剩餘中最大的
+            const finalPrice = priceCandidates.find(c => c.hasSymbol) || 
+                               priceCandidates.sort((a,b) => b.val - a.val)[0];
+            
+            if (finalPrice) document.getElementById('price').value = finalPrice.val;
+
+            // 2. 名稱邏輯：文字比例最高者
+            const nameCandidates = lines.map(line => {
+                const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊]/g, ''); // 排除數字與價格符號
+                const ratio = textOnly.length / line.length; // 計算文字比例
+                return { line, ratio };
             });
 
-            if (nameLine) {
-                // 剔除名稱行中可能殘留的價格資訊
-                document.getElementById('itemName').value = nameLine.replace(priceRegex, '').trim();
+            // 排序取得文字比例最高的一行（這能包含 600ml 但排除掉純價格行）
+            const bestName = nameCandidates.sort((a,b) => b.ratio - a.ratio)[0];
+            if (bestName) {
+                // 清理掉名稱行末尾可能的殘餘數字/價格符號
+                document.getElementById('itemName').value = bestName.line.replace(/[$¥NT\d,.]+$/g, '').trim();
             }
             
             status.innerText = "✅ 辨識完成";
@@ -129,26 +125,19 @@
             updateHistory();
         } catch (e) {
             status.innerText = "❌ 辨識失敗";
-            console.error(e);
         }
     }
 
     function saveRecord() {
         const name = document.getElementById('itemName').value;
         const price = document.getElementById('price').value;
-        const store = document.getElementById('storeName').value || "未分類";
-        const count = document.getElementById('count').value;
-
         if (!name || !price) return alert("請輸入名稱與價格");
-
         db.push({
-            name: name,
-            price: parseFloat(price),
-            store: store,
+            name, price: parseFloat(price), 
+            store: document.getElementById('storeName').value || "未分類",
             date: new Date().toLocaleDateString(),
-            cp: parseFloat(price) / parseFloat(count)
+            cp: parseFloat(price) / parseFloat(document.getElementById('count').value)
         });
-
         localStorage.setItem('priceRecords', JSON.stringify(db));
         alert("儲存成功！");
         renderTabs();
@@ -164,24 +153,18 @@
     }
 
     function switchTab(storeName) {
-        document.querySelectorAll('.tab').forEach(t => {
-            t.classList.toggle('active', t.innerText === storeName);
-        });
+        document.querySelectorAll('.tab').forEach(t => { t.classList.toggle('active', t.innerText === storeName); });
     }
 
     function updateHistory() {
         const name = document.getElementById('itemName').value.trim();
         const box = document.getElementById('history-box');
         if (!name) { box.innerHTML = ""; return; }
-
         const matches = db.filter(r => r.name.includes(name));
         if (matches.length > 0) {
             const ps = matches.map(m => m.price);
-            const bestStore = matches.sort((a,b) => a.cp - b.cp)[0].store;
-            box.innerHTML = `📍 歷史：$${Math.min(...ps)} ~ $${Math.max(...ps)} | 推薦：${bestStore}`;
-        } else {
-            box.innerHTML = "🔍 尚無紀錄";
-        }
+            box.innerHTML = `📍 歷史：$${Math.min(...ps)} ~ $${Math.max(...ps)}`;
+        } else { box.innerHTML = "🔍 尚無紀錄"; }
     }
 
     function resetForm() {
