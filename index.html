@@ -39,6 +39,11 @@
     </div>
 
     <div class="input-group">
+        <label>購買商店名稱</label>
+        <input type="text" id="storeName" value="好市多">
+    </div>
+
+    <div class="input-group">
         <label>單價 (元)</label>
         <input type="number" id="price" placeholder="請輸入金額" oninput="calculate()">
     </div>
@@ -57,7 +62,6 @@
 </div>
 
 <script>
-    // 資料庫初始化
     let db = JSON.parse(localStorage.getItem('priceRecords')) || [];
 
     function calculate() {
@@ -75,9 +79,9 @@
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
             const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // --- 價格處理：獨立語意實體判定 ---
+            // 1. 價格處理：禁止切碎長數字 (解決 153702 問題)
             let priceCandidates = [];
-            // 只匹配獨立的 1-5 位數字，排除緊貼英文字母的型號 (如 A1119B)
+            // 只匹配獨立的 1-5 位數字，排除緊貼字母的型號
             const strictPriceRegex = /(?:^|[\s$¥]|NT\$|價[:：])(\d{1,5}(?:[.,]\d{1,2})?)(?:\s|$)/i;
 
             lines.forEach(line => {
@@ -86,39 +90,70 @@
                     const val = parseFloat(match[1].replace(/,/g, ''));
                     let score = /[$¥]|NT\$/i.test(line) ? 200 : 50;
                     if (/特價|售價|優惠/i.test(line)) score += 100;
-                    if (/原價|定價/i.test(line)) score += 20;
-                    if (/編號|No|碼|Tel|日期|202\d|Exp/i.test(line)) score -= 500;
+                    if (/編號|No|碼|Tel|日期|202\d/i.test(line)) score -= 500;
                     priceCandidates.push({ val, score });
                 }
             });
             const bestPrice = priceCandidates.sort((a,b) => b.score - a.score)[0];
             if (bestPrice && bestPrice.score > -100) document.getElementById('price').value = bestPrice.val;
 
-            // --- 名稱處理：區段連續合併與即時終止 ---
-            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', 'Tel', '成分', '網址', '總計', 'Total'];
+            // 2. 名稱處理：合併相鄰行 (解決 KIRKLAND + 奶油 問題)
+            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', 'Tel', '成分', '網址'];
             let nameBuffer = [];
             let stopMerging = false;
 
             for (let line of lines) {
                 if (stopMerging) break;
-
                 const isPriceLine = strictPriceRegex.test(line);
                 const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊\-/]/g, '');
                 const ratio = line.length > 0 ? textOnly.length / line.length : 0;
                 const isBlacklisted = blacklist.some(word => line.includes(word));
 
-                // 合併規則：文字比例達標且不是價格行、不是黑名單
                 if (!isBlacklisted && !isPriceLine && ratio > 0.4 && line.length > 1) {
                     nameBuffer.push(line.replace(/[$¥NT\d,.]+$/g, '').trim());
-                } else {
-                    // 終止條件：一旦品名區段開始後遇到價格或黑名單，即停止合併
-                    if (nameBuffer.length > 0) stopMerging = true;
+                } else if (nameBuffer.length > 0) {
+                    stopMerging = true;
                 }
             }
-
-            if (nameBuffer.length > 0) {
-                document.getElementById('itemName').value = nameBuffer.join(' ');
-            }
+            if (nameBuffer.length > 0) document.getElementById('itemName').value = nameBuffer.join(' ');
             
             status.innerText = "✅ 辨識完成";
-            calculate
+            calculate();
+            updateHistory();
+        } catch (e) {
+            status.innerText = "❌ 辨識失敗";
+            console.error(e);
+        }
+    }
+
+    function saveRecord() {
+        const name = document.getElementById('itemName').value;
+        const price = document.getElementById('price').value;
+        if (!name || !price) return alert("請輸入名稱與價格");
+        db.push({ name, price: parseFloat(price), date: new Date().toLocaleDateString() });
+        localStorage.setItem('priceRecords', JSON.stringify(db));
+        alert("儲存成功！");
+        resetForm();
+    }
+
+    function updateHistory() {
+        const name = document.getElementById('itemName').value.trim();
+        const box = document.getElementById('history-box');
+        if (!name) { box.innerHTML = ""; return; }
+        const matches = db.filter(r => r.name.includes(name));
+        if (matches.length > 0) {
+            const ps = matches.map(m => m.price);
+            box.innerHTML = `📍 歷史：$${Math.min(...ps)} ~ $${Math.max(...ps)}`;
+        } else { box.innerHTML = "🔍 尚無紀錄"; }
+    }
+
+    function resetForm() {
+        document.getElementById('price').value = '';
+        document.getElementById('itemName').value = '';
+        document.getElementById('ocr-upload').value = '';
+        document.getElementById('total').innerText = '$ 0';
+        document.getElementById('ocr-status').innerText = '支援 中/日/英';
+    }
+</script>
+</body>
+</html>
