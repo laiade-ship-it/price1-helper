@@ -1,155 +1,158 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>購物比價小幫手 - 修正版</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <style>
-        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 480px; background: var(--card); padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
-        .ocr-upload-zone { background: #fffbe6; border: 2px dashed #ffe58f; padding: 20px; border-radius: 15px; text-align: center; cursor: pointer; }
-        .input-group { margin-top: 15px; }
-        label { display: block; font-size: 14px; font-weight: bold; color: #666; margin-bottom: 5px; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .btn-save { background: var(--success); color: white; }
-        .tab-btn { padding: 8px 15px; border-radius: 20px; background: #eee; cursor: pointer; font-size: 13px; white-space: nowrap; }
-        .tab-btn.active { background: var(--primary); color: white; }
-        .record-item { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>精準比價小幫手 - 穩定安全版</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<style>
+:root { --primary:#4a90e2; --bg:#f8f9fa; --card:#fff; --success:#27ae60; }
+body { font-family:-apple-system,"Noto Sans TC",sans-serif; background:var(--bg); margin:0; padding:15px; display:flex; justify-content:center; }
+.container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:20px; box-shadow:0 10px 25px rgba(0,0,0,.08); }
+.ocr-upload-zone { background:#fffbe6; border:2px dashed #ffe58f; padding:20px; border-radius:15px; text-align:center; cursor:pointer; }
+.input-group { margin-top:15px; }
+label { font-size:14px; font-weight:bold; color:#666; }
+input { width:100%; padding:12px; border:1px solid #ddd; border-radius:10px; }
+button { width:100%; padding:14px; border:none; border-radius:12px; font-weight:bold; cursor:pointer; margin-top:12px; }
+.btn-save { background:var(--success); color:#fff; }
+.tab-btn { padding:6px 14px; border-radius:20px; background:#eee; cursor:pointer; font-size:13px; }
+.tab-btn.active { background:var(--primary); color:#fff; }
+.record-item { background:#fff; padding:10px; border-radius:10px; margin-bottom:8px; border:1px solid #eee; display:flex; justify-content:space-between; }
+</style>
 </head>
+
 <body>
-
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary);">🛒 比價小幫手</h2>
+<h2 style="text-align:center;color:#4a90e2;">🛒 比價小幫手</h2>
 
-    <div class="ocr-upload-zone" onclick="document.getElementById('ocr-upload').click()">
-        <span style="font-size: 30px;">📸</span>
-        <p id="ocr-status">點擊拍攝標籤</p>
-        <input type="file" id="ocr-upload" accept="image/*" style="display:none" onchange="performOCR(this)">
-    </div>
+<div class="ocr-upload-zone" onclick="document.getElementById('ocr-upload').click()">
+📸 點擊拍攝價格牌
+<input type="file" id="ocr-upload" accept="image/*" style="display:none" onchange="performOCR(this)">
+<p id="ocr-status">等待辨識</p>
+</div>
 
-    <div class="input-group">
-        <label>🏪 商店</label>
-        <input type="text" id="storeName" placeholder="例如：好市多">
-    </div>
-    <div class="input-group">
-        <label>🔍 品名</label>
-        <input type="text" id="itemName" placeholder="自動辨識">
-    </div>
-    <div style="display: flex; gap: 10px;">
-        <div class="input-group" style="flex: 2;">
-            <label>💵 單價</label>
-            <input type="number" id="price" inputmode="decimal">
-        </div>
-        <div class="input-group" style="flex: 1;">
-            <label>🔢 數量</label>
-            <input type="number" id="count" value="1">
-        </div>
-    </div>
+<div class="input-group">
+<label>🏪 商店</label>
+<input id="storeName" placeholder="例如：全聯">
+</div>
 
-    <button class="btn-save" onclick="saveRecord()">✅ 儲存紀錄</button>
+<div class="input-group">
+<label>📦 商品名稱</label>
+<input id="itemName">
+</div>
 
-    <div id="store-tabs-container" style="margin-top:20px;">
-        <div id="tab-headers" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:10px;"></div>
-        <div id="tab-contents"></div>
-    </div>
-    
-    <button style="background:#ff4d4f; color:white; font-size:12px; margin-top:30px;" onclick="localStorage.clear(); location.reload();">清空所有舊資料</button>
+<div class="input-group">
+<label>💵 價格</label>
+<input id="price" type="number">
+</div>
+
+<button class="btn-save" onclick="saveRecord()">儲存</button>
+
+<div style="margin-top:20px;">
+<div id="tab-headers" style="display:flex;gap:8px;overflow-x:auto;"></div>
+<div id="tab-contents"></div>
+</div>
 </div>
 
 <script>
+/* ------------------ 安全初始化 ------------------ */
 let storeData = {};
 
-// 初始化資料，加入強大的錯誤處理
-function init() {
-    try {
-        const raw = localStorage.getItem('storeTabsData');
-        storeData = JSON.parse(raw) || {};
-        if (Array.isArray(storeData)) storeData = {}; // 修正舊版格式
-    } catch (e) {
-        storeData = {};
-    }
-    renderTabs();
+try {
+    const raw = localStorage.getItem('storeTabsData');
+    if (raw) storeData = JSON.parse(raw);
+    if (Array.isArray(storeData)) storeData = {};
+} catch (e) {
+    storeData = {};
 }
 
+/* ------------------ OCR 核心（100% 防呆） ------------------ */
 async function performOCR(input) {
-    if (!input.files[0]) return;
     const status = document.getElementById('ocr-status');
+    if (!input || !input.files || !input.files[0]) return;
+
     status.innerText = "⏳ 辨識中...";
+    let worker;
+
     try {
-        const worker = await Tesseract.createWorker('chi_tra+eng');
-        const { data: { lines } } = await worker.recognize(input.files[0]);
-        await worker.terminate();
+        worker = await Tesseract.createWorker();
+        await worker.loadLanguage('chi_tra+eng');
+        await worker.initialize('chi_tra+eng');
 
-        const cleanLines = lines.map(l => l.text.trim()).filter(l => l.length > 0);
-        let bestPrice = "";
-        let bestName = "";
+        const { data } = await worker.recognize(input.files[0]);
+        const lines = (data.lines || []).map(l => l.text.trim()).filter(Boolean);
 
-        // 簡單辨識邏輯：找含數字且長度合理的做價格
-        cleanLines.forEach(line => {
-            if (/[\u4e00-\u9fa5]/.test(line) && bestName === "") bestName = line;
-            const m = line.match(/\d+/);
-            if (m && m[0].length < 6 && bestPrice === "") bestPrice = m[0];
+        let nameParts = [];
+        let prices = [];
+
+        const priceSemantic = /(?:NT\$|\$|特價|售價|總計)[:：\s]*([\d,]{2,7})/i;
+        const barcode = /^\d{8,13}$/;
+
+        lines.forEach(line => {
+            if (/[\u4e00-\u9fa5a-zA-Z]/.test(line) && nameParts.length < 2 && !priceSemantic.test(line)) {
+                nameParts.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g,'').trim());
+            }
+
+            const m = line.match(priceSemantic);
+            if (m) prices.push(parseInt(m[1].replace(/,/g,'')));
+
+            if (!m && !barcode.test(line)) {
+                const f = line.match(/\b\d{2,5}\b/g);
+                if (f) f.forEach(n => prices.push(parseInt(n)));
+            }
         });
 
-        document.getElementById('price').value = bestPrice;
-        document.getElementById('itemName').value = bestName;
-        status.innerText = "✅ 辨識完成";
-    } catch (e) {
-        status.innerText = "❌ 辨識失敗";
+        document.getElementById('itemName').value = nameParts.join(' ');
+        document.getElementById('price').value = prices.length ? Math.max(...prices) : "";
+
+        status.innerText = prices.length ? "✅ 辨識完成" : "⚠️ 未抓到價格";
+
+    } catch (err) {
+        console.error(err);
+        status.innerText = "❌ OCR 失敗，可手動輸入";
+    } finally {
+        if (worker) {
+            try { await worker.terminate(); } catch {}
+        }
     }
 }
 
+/* ------------------ 儲存與分頁 ------------------ */
 function saveRecord() {
     const store = document.getElementById('storeName').value || "未分類";
     const name = document.getElementById('itemName').value;
     const price = document.getElementById('price').value;
-    
-    if(!name || !price) return alert("請填寫品名與價格");
+
+    if (!name || !price) return alert("請填品名與價格");
 
     if (!storeData[store]) storeData[store] = [];
     storeData[store].push({ name, price, date: new Date().toLocaleDateString() });
-    
+
     localStorage.setItem('storeTabsData', JSON.stringify(storeData));
     renderTabs(store);
 }
 
-function renderTabs(activeStore = null) {
+function renderTabs(active) {
     const headers = document.getElementById('tab-headers');
     const contents = document.getElementById('tab-contents');
+    if (!headers || !contents) return;
 
-    // 防禦性檢查：如果找不到 HTML 元素，就跳出不執行，避免報錯
-    if (!headers || !contents) {
-        console.error("找不到 tab-headers 或 tab-contents 標籤！");
-        return;
-    }
+    const stores = Object.keys(storeData);
+    if (!stores.length) return;
 
-    const names = Object.keys(storeData);
-    if (names.length === 0) {
-        headers.innerHTML = "";
-        contents.innerHTML = "<p style='text-align:center; color:#ccc;'>尚無紀錄</p>";
-        return;
-    }
+    active = active || stores[stores.length - 1];
 
-    if (!activeStore) activeStore = names[names.length - 1];
+    headers.innerHTML = stores.map(s =>
+        `<div class="tab-btn ${s===active?'active':''}" onclick="renderTabs('${s}')">${s}</div>`
+    ).join('');
 
-    headers.innerHTML = names.map(n => `
-        <div class="tab-btn ${n === activeStore ? 'active' : ''}" onclick="renderTabs('${n}')">${n}</div>
-    `).join('');
-
-    const list = storeData[activeStore] || [];
-    contents.innerHTML = list.slice().reverse().map(r => `
-        <div class="record-item">
-            <div><b>${r.name}</b><br><small>${r.date}</small></div>
-            <div>$${r.price}</div>
-        </div>
-    `).join('');
+    contents.innerHTML = storeData[active].slice().reverse().map(r =>
+        `<div class="record-item"><div>${r.name}<br><small>${r.date}</small></div><div>$${r.price}</div></div>`
+    ).join('');
 }
 
-window.onload = init;
+renderTabs();
 </script>
 </body>
 </html>
