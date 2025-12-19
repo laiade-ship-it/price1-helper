@@ -3,98 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 混合最強版</title>
+    <title>購物比價小幫手 - 終極穩定版</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --text: #333; --accent: #e67e22; --success: #27ae60; }
-        body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; display: flex; justify-content: center; }
+        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; }
+        body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 480px; background: var(--card); padding: 20px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); box-sizing: border-box; }
-        h2 { text-align: center; margin-bottom: 20px; font-weight: 800; color: var(--primary); }
-
-        .ocr-upload-zone { background: #fffbe6; border: 2px dashed #ffe58f; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; cursor: pointer; transition: 0.2s; }
-        .ocr-upload-zone:active { background: #fff1b8; }
-        .ocr-status { font-size: 13px; color: #856404; font-weight: bold; margin-top: 10px; display: block; }
-
-        .input-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 700; color: #666; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; outline: none; }
-        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,144,226,0.1); }
-        .history-tip { font-size: 12px; color: var(--accent); margin-top: 5px; min-height: 18px; font-weight: bold; }
-
-        .result-card { background: #e6f7ff; border: 1px solid #91d5ff; padding: 15px; border-radius: 15px; text-align: center; margin: 20px 0; }
-        .total-amount { font-size: 32px; font-weight: 900; color: #0050b3; }
-
-        button { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-save { background: var(--success); color: white; margin-bottom: 10px; }
-        .btn-reset { background: #f0f0f0; color: #888; }
-
-        #store-tabs-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 20px; }
-        .tab-headers { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
-        .tab-headers::-webkit-scrollbar { display: none; }
-        .tab-btn { background: #eee; border: 1px solid #ddd; padding: 8px 15px; border-radius: 20px; cursor: pointer; white-space: nowrap; font-size: 13px; font-weight: bold; flex-shrink: 0; }
-        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        
-        .tab-contents { background: #fafafa; border-radius: 15px; padding: 12px; min-height: 100px; }
-        .record-item { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; justify-content: space-between; align-items: center; }
-        [contenteditable="true"] { border-bottom: 1px dashed #ccc; outline: none; }
+        .ocr-upload-zone { background: #fffbe6; border: 2px dashed #ffe58f; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; cursor: pointer; }
+        .ocr-status { font-size: 13px; color: #856404; font-weight: bold; display: block; margin-top: 10px; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; font-weight: bold; color: #666; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn-save { background: var(--success); color: white; margin-top: 10px; }
+        .btn-clear { background: #ff4d4f; color: white; margin-top: 10px; font-size: 12px; padding: 5px; width: auto; opacity: 0.7; }
+        .tab-btn { padding: 8px 15px; border-radius: 20px; background: #eee; cursor: pointer; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+        .tab-btn.active { background: var(--primary); color: white; }
+        .record-item { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>🛒 精準購物比價小幫手</h2>
+    <h2 style="text-align:center; color:var(--primary);">🛒 購物比價小幫手</h2>
 
     <div class="ocr-upload-zone" onclick="document.getElementById('ocr-upload').click()">
-        <span style="font-size: 32px;">📸</span>
-        <p style="margin: 5px 0; font-weight: bold;">拍攝/上傳價格牌</p>
-        <input type="file" id="ocr-upload" accept="image/*" onchange="performOCR(this)">
-        <span id="ocr-status" class="ocr-status">支援雙行品名與條碼過濾</span>
+        <span style="font-size: 30px;">📸</span>
+        <p id="ocr-status">點擊拍攝/上傳標籤</p>
+        <input type="file" id="ocr-upload" accept="image/*" style="display:none" onchange="performOCR(this)">
     </div>
 
     <div class="input-group">
         <label>🏪 商店名稱</label>
-        <input type="text" id="storeName" placeholder="例如：好市多、全聯...">
+        <input type="text" id="storeName" placeholder="例如：好市多">
     </div>
 
     <div class="input-group">
         <label>🔍 商品名稱</label>
-        <input type="text" id="itemName" placeholder="自動擷取品名" oninput="updateHistory()">
-        <div id="history-box" class="history-tip"></div>
+        <input type="text" id="itemName" placeholder="自動辨識品名">
     </div>
 
     <div style="display: flex; gap: 10px;">
         <div class="input-group" style="flex: 2;">
-            <label>💵 單價 (元)</label>
-            <input type="number" id="price" placeholder="0" inputmode="decimal" oninput="calculate()">
+            <label>💵 單價</label>
+            <input type="number" id="price" inputmode="decimal" placeholder="0">
         </div>
         <div class="input-group" style="flex: 1;">
             <label>🔢 數量</label>
-            <input type="number" id="count" value="1" inputmode="numeric" oninput="calculate()">
+            <input type="number" id="count" value="1" inputmode="numeric">
         </div>
     </div>
 
-    <div class="result-card">
-        <div class="total-amount" id="total">$ 0</div>
+    <button class="btn-save" onclick="saveRecord()">✅ 儲存紀錄</button>
+    
+    <div id="store-tabs-container" style="margin-top:25px; border-top:1px solid #eee; padding-top:15px;">
+        <div id="tab-headers" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:10px;"></div>
+        <div id="tab-contents"></div>
     </div>
 
-    <button class="btn-save" onclick="saveRecord()">✅ 儲存紀錄</button>
-    <button class="btn-reset" onclick="resetForm()">清除重設</button>
-
-    <div id="store-tabs-container">
-        <div id="tab-headers" class="tab-headers"></div>
-        <div id="tab-contents" class="tab-contents"></div>
+    <div style="text-align: center; margin-top: 30px;">
+        <button class="btn-clear" onclick="if(confirm('確定要清空所有資料嗎？')) { localStorage.clear(); location.reload(); }">⚠️ 清空所有資料</button>
     </div>
 </div>
 
 <script>
-let db = JSON.parse(localStorage.getItem('shopRecords')) || [];
-let storeData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
+// --- 安全初始化 ---
+let db = [];
+let storeData = {};
 
-// --- 核心 OCR 混合優化邏輯 ---
+function initData() {
+    try {
+        db = JSON.parse(localStorage.getItem('shopRecords')) || [];
+        let rawStore = localStorage.getItem('storeTabsData');
+        storeData = JSON.parse(rawStore) || {};
+        
+        // 核心修正：如果讀取到的是舊版陣列格式，強制轉為物件
+        if (Array.isArray(storeData)) {
+            console.warn("偵測到舊資料格式，自動重置中...");
+            storeData = {};
+        }
+    } catch (e) {
+        storeData = {};
+    }
+}
+
+// --- OCR 邏輯 (雙行品名 + 條碼過濾 + 距離加分) ---
 async function performOCR(input) {
     if (!input.files || !input.files[0]) return;
     const status = document.getElementById('ocr-status');
-    const itemNameInput = document.getElementById('itemName');
-    status.innerText = "⌛ 正在深度辨識中...";
+    status.innerText = "⌛ 辨識中...";
     
     try {
         const worker = await Tesseract.createWorker('chi_tra+eng');
@@ -110,95 +106,67 @@ async function performOCR(input) {
         const pureNumberBarcodeRegex = /^\d{5,13}$/;
 
         cleanLines.forEach((line, i) => {
-            // 1. 抓取高權重語義價格
             const sMatch = line.match(semanticPriceRegex);
             if (sMatch) {
                 candidates.push({ val: parseFloat(sMatch[1].replace(/,/g, '')), score: 100, idx: i });
             }
 
-            // 2. 抓取品名 (前兩行含有中文且排除純數字與價格行)
-            if (/[\u4e00-\u9fa5]/.test(line) && 
-                !pureNumberBarcodeRegex.test(line) && 
-                !semanticPriceRegex.test(line) && 
-                nameLinesBuffer.length < 2) {
+            if (/[\u4e00-\u9fa5]/.test(line) && !pureNumberBarcodeRegex.test(line) && !semanticPriceRegex.test(line) && nameLinesBuffer.length < 2) {
                 nameLinesBuffer.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
-                if (nameLineIdx === -1) nameLineIdx = i; // 以第一行品名為距離錨點
+                if (nameLineIdx === -1) nameLineIdx = i;
             }
 
-            // 3. 抓取低權重 Fallback 價格 (過濾條碼)
             if (!sMatch && !pureNumberBarcodeRegex.test(line)) {
                 const fMatches = line.match(/([\d,]{2,6})/g);
                 if (fMatches) {
                     fMatches.forEach(m => {
                         const val = parseFloat(m.replace(/,/g, ''));
-                        if (val > 5 && val < 100000 && m.length < 6) {
-                            candidates.push({ val, score: 50, idx: i });
-                        }
+                        if (val > 5 && val < 100000) candidates.push({ val, score: 50, idx: i });
                     });
                 }
             }
         });
 
-        // 第二輪：距離加分邏輯 (Gemini 修正版)
         if (nameLineIdx !== -1) {
             candidates.forEach(c => {
                 const dist = Math.abs(c.idx - nameLineIdx);
-                c.score += (15 - Math.min(dist, 15)); 
+                c.score += (15 - Math.min(dist, 15));
             });
         }
 
         const best = candidates.sort((a, b) => b.score - a.score)[0];
-        
         document.getElementById('price').value = best ? best.val : '';
-        itemNameInput.value = nameLinesBuffer.join(' ').trim();
-        status.innerText = best ? "✅ 辨識完成" : "⚠️ 請手動微調";
-        
-        calculate();
-        updateHistory();
+        document.getElementById('itemName').value = nameLinesBuffer.join(' ').trim();
+        status.innerText = "✅ 辨識完成";
     } catch (e) {
         status.innerText = "❌ 辨識出錯";
-        console.error(e);
     }
-}
-
-// --- 介面與資料操作 ---
-function calculate() {
-    const p = parseFloat(document.getElementById('price').value) || 0;
-    const c = parseInt(document.getElementById('count').value) || 1;
-    document.getElementById('total').innerText = '$ ' + Math.round(p * c).toLocaleString();
 }
 
 function saveRecord() {
     const name = document.getElementById('itemName').value.trim();
     const price = document.getElementById('price').value;
-    const count = document.getElementById('count').value || 1;
-    const store = document.getElementById('storeName').value.trim() || "未分類商店";
+    const store = document.getElementById('storeName').value.trim() || "未分類";
+    
+    if (!name || !price) return alert("請填寫名稱與價格");
 
-    if (!name || !price) return alert("請填寫商品名稱與價格");
-
-    const record = { name, price: parseFloat(price), count: parseInt(count), date: new Date().toLocaleString() };
-
-    // 儲存比價庫
-    db.push({ name, price: parseFloat(price), date: new Date().toLocaleDateString() });
-    localStorage.setItem('shopRecords', JSON.stringify(db));
-
-    // 儲存商店分頁 (物件結構)
+    const record = { name, price: parseFloat(price), date: new Date().toLocaleDateString() };
     if (!storeData[store]) storeData[store] = [];
     storeData[store].push(record);
+    
     localStorage.setItem('storeTabsData', JSON.stringify(storeData));
-
     renderTabs(store);
-    resetForm();
-    alert("已儲存紀錄！");
+    alert("儲存成功");
 }
 
 function renderTabs(activeStore = null) {
     const headers = document.getElementById('tab-headers');
     const contents = document.getElementById('tab-contents');
-    const names = Object.keys(storeData);
     
+    const names = Object.keys(storeData);
     if (names.length === 0) {
-        contents.innerHTML = "<div style='color:#999;text-align:center;'>尚未有紀錄</div>";
+        headers.innerHTML = "";
+        contents.innerHTML = "<p style='text-align:center;color:#ccc;'>尚無紀錄</p>";
         return;
     }
 
@@ -208,41 +176,13 @@ function renderTabs(activeStore = null) {
         <div class="tab-btn ${n === activeStore ? 'active' : ''}" onclick="renderTabs('${n}')">${escapeHtml(n)}</div>
     `).join('');
 
-    const items = storeData[activeStore] || [];
-    contents.innerHTML = items.slice().reverse().map((r, i) => {
-        const originalIdx = items.length - 1 - i;
-        return `
+    const list = storeData[activeStore] || [];
+    contents.innerHTML = list.slice().reverse().map(r => `
         <div class="record-item">
-            <div style="flex:1;">
-                <b contenteditable="true" onblur="updateStoreItem('${activeStore}',${originalIdx},'name',this.innerText)">${escapeHtml(r.name)}</b><br>
-                <small style="color:#999">${r.date}</small>
-            </div>
-            <div style="text-align:right;">
-                $<span contenteditable="true" onblur="updateStoreItem('${activeStore}',${originalIdx},'price',this.innerText)">${r.price}</span> x ${r.count}<br>
-                <b style="color:var(--success)">$${(r.price * r.count).toLocaleString()}</b>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function updateStoreItem(storeName, index, field, newValue) {
-    let val = newValue.trim();
-    if (field === 'price') val = parseFloat(val) || 0;
-    storeData[storeName][index][field] = val;
-    localStorage.setItem('storeTabsData', JSON.stringify(storeData));
-}
-
-function updateHistory() {
-    const name = document.getElementById('itemName').value.trim();
-    const box = document.getElementById('history-box');
-    if (name.length < 2) { box.innerText = ""; return; }
-    const matches = db.filter(r => r.name.includes(name));
-    if (matches.length > 0) {
-        const ps = matches.map(m => m.price);
-        box.innerText = `🕒 歷史價格：$${Math.min(...ps)} ~ $${Math.max(...ps)}`;
-    } else {
-        box.innerText = "";
-    }
+            <div><b>${escapeHtml(r.name)}</b><br><small style="color:#999">${r.date}</small></div>
+            <div style="font-weight:bold; color:var(--primary);">$${r.price}</div>
+        </div>
+    `).join('');
 }
 
 function escapeHtml(text) {
@@ -251,15 +191,10 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function resetForm() {
-    document.getElementById('price').value = '';
-    document.getElementById('itemName').value = '';
-    document.getElementById('count').value = '1';
-    document.getElementById('total').innerText = '$ 0';
-    document.getElementById('ocr-status').innerText = "點擊拍攝/上傳價格牌";
-}
-
-window.onload = () => renderTabs();
+window.onload = () => {
+    initData();
+    renderTabs();
+};
 </script>
 </body>
 </html>
