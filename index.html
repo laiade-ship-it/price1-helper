@@ -3,31 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>價格計算小幫手 - 專業版</title>
+    <title>價格計算小幫手</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary-color: #4a90e2; --bg-color: #f5f7fa; --save-color: #27ae60; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); display: flex; justify-content: center; padding: 20px; margin: 0; }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg-color); display: flex; justify-content: center; padding: 20px; margin: 0; }
         .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
         h2 { text-align: center; color: #333; margin-bottom: 20px; }
         .input-group { margin-bottom: 12px; }
         label { display: block; margin-bottom: 5px; color: #666; font-size: 14px; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
         
-        /* 新增功能樣式 */
         .ocr-group { background: #f9f9f9; padding: 10px; border-radius: 8px; border: 1px dashed #ccc; margin-bottom: 15px; text-align: center; }
         #store-tabs { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
         .tab { padding: 5px 12px; background: #eee; border-radius: 15px; font-size: 12px; white-space: nowrap; cursor: pointer; }
         .tab.active { background: var(--primary-color); color: white; }
+        
         .history-info { font-size: 12px; color: #e67e22; margin-top: 5px; min-height: 20px; }
-        .save-btn { background-color: var(--save-color) !important; margin-top: 10px; }
-        #ocr-status { font-size: 12px; color: #666; display: block; margin-top: 5px; }
-
         .result-area { background: #f0f7ff; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
-        .result-label { font-size: 14px; color: #555; }
-        .result-value { font-size: 28px; font-weight: bold; color: var(--primary-color); margin: 5px 0; }
-        button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 5px; }
-        button:active { opacity: 0.8; }
+        .result-value { font-size: 28px; font-weight: bold; color: var(--primary-color); }
+        
+        button { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+        .save-btn { background-color: var(--save-color) !important; }
     </style>
 </head>
 <body>
@@ -38,7 +35,7 @@
     <div class="ocr-group">
         <label>📷 拍照辨識名稱與價格</label>
         <input type="file" id="ocr-upload" accept="image/*" onchange="performOCR(this)">
-        <span id="ocr-status">支援 中/日/英</span>
+        <span id="ocr-status" style="font-size:12px; color:#666; display: block; margin-top: 5px;">支援 中/日/英</span>
     </div>
 
     <div id="store-tabs">
@@ -53,9 +50,9 @@
 
     <div class="input-group">
         <label>購買商店名稱</label>
-        <input type="text" id="storeName" placeholder="例如：全聯" oninput="calculate()">
+        <input type="text" id="storeName" placeholder="例如：全聯">
     </div>
-    
+
     <div class="input-group">
         <label>單價 (元)</label>
         <input type="number" id="price" placeholder="請輸入金額" oninput="calculate()">
@@ -67,7 +64,6 @@
     </div>
 
     <div class="result-area">
-        <div class="result-label">計算結果</div>
         <div class="result-value" id="total">$ 0</div>
     </div>
 
@@ -78,47 +74,65 @@
 <script>
     let db = JSON.parse(localStorage.getItem('priceRecords')) || [];
 
-    // 初始化載入分頁
+    // 初始化載入分頁標籤
     window.onload = () => { renderTabs(); };
 
     function calculate() {
-        const price = document.getElementById('price').value;
-        const count = document.getElementById('count').value;
-        if (price && count) {
-            let total = price * count;
-            document.getElementById('total').innerText = '$ ' + Math.round(total).toLocaleString();
+        const p = document.getElementById('price').value;
+        const c = document.getElementById('count').value;
+        if (p && c) {
+            document.getElementById('total').innerText = '$ ' + Math.round(p * c).toLocaleString();
         } else {
             document.getElementById('total').innerText = '$ 0';
         }
     }
 
-    // 1️⃣ OCR 功能實作
+    // 【核心修正：OCR 解析邏輯】
     async function performOCR(input) {
         if (!input.files || !input.files[0]) return;
         const status = document.getElementById('ocr-status');
         status.innerText = "⌛ 辨識中...請稍候";
         
         try {
-            const result = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
-            const text = result.data.text;
+            const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
+            const text = r.data.text;
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            // 1. 價格辨識邏輯 (處理符號與千分位)
+            const priceRegex = /([$¥]|NT\$)?\s?(\d{1,3}(,\d{3})*(\.\d+)?|\d+(\.\d+)?)/gi;
+            const allMatches = text.match(priceRegex) || [];
             
-            // 簡單正則提取價格 (尋找 $ 符號後的數字或獨立數字)
-            const priceMatch = text.match(/\d+/); 
-            if (priceMatch) document.getElementById('price').value = priceMatch[0];
-            
-            // 提取第一行作為商品名稱參考
-            const lines = text.split('\n').filter(l => l.trim().length > 1);
-            if (lines.length > 0) document.getElementById('itemName').value = lines[0].trim();
+            let bestPrice = "";
+            for (let match of allMatches) {
+                let clean = match.replace(/[^\d.]/g, ''); // 只留數字與小數點
+                if (clean && !isNaN(clean) && parseFloat(clean) > 0) {
+                    bestPrice = clean;
+                    break; 
+                }
+            }
+            if (bestPrice) document.getElementById('price').value = bestPrice;
+
+            // 2. 商品名稱辨識邏輯 (過濾掉純數字與價格行)
+            const nameLine = lines.find(l => {
+                const hasRealText = /[^\d\s,.$¥NT:：xX*＊]/.test(l); // 含有真正的文字
+                const isNotJustPrice = !/^[\d,.$¥\s]+$/.test(l);    // 不僅僅是價格組合
+                return hasRealText && isNotJustPrice;
+            });
+
+            if (nameLine) {
+                // 剔除名稱行中可能殘留的價格資訊
+                document.getElementById('itemName').value = nameLine.replace(priceRegex, '').trim();
+            }
             
             status.innerText = "✅ 辨識完成";
             calculate();
             updateHistory();
         } catch (e) {
-            status.innerText = "❌ 辨識失敗，請手動輸入";
+            status.innerText = "❌ 辨識失敗";
+            console.error(e);
         }
     }
 
-    // 5️⃣ 儲存功能
     function saveRecord() {
         const name = document.getElementById('itemName').value;
         const price = document.getElementById('price').value;
@@ -127,29 +141,25 @@
 
         if (!name || !price) return alert("請輸入名稱與價格");
 
-        const record = {
-            id: Date.now(),
+        db.push({
             name: name,
             price: parseFloat(price),
             store: store,
             date: new Date().toLocaleDateString(),
-            cp: parseFloat(price) / parseFloat(count) // CP值計算基準
-        };
+            cp: parseFloat(price) / parseFloat(count)
+        });
 
-        db.push(record);
         localStorage.setItem('priceRecords', JSON.stringify(db));
         alert("儲存成功！");
         renderTabs();
+        resetForm();
     }
 
-    // 4️⃣ 分頁邏輯
     function renderTabs() {
         const tabsContainer = document.getElementById('store-tabs');
         const stores = [...new Set(db.map(r => r.store))];
         let html = `<div class="tab active" onclick="switchTab('全部')">全部</div>`;
-        stores.forEach(s => {
-            html += `<div class="tab" onclick="switchTab('${s}')">${s}</div>`;
-        });
+        stores.forEach(s => { html += `<div class="tab" onclick="switchTab('${s}')">${s}</div>`; });
         tabsContainer.innerHTML = html;
     }
 
@@ -157,10 +167,8 @@
         document.querySelectorAll('.tab').forEach(t => {
             t.classList.toggle('active', t.innerText === storeName);
         });
-        // 這裡僅切換狀態，UI 流程依要求不改動，故不跳轉頁面
     }
 
-    // 6️⃣ 歷史比價與搜尋
     function updateHistory() {
         const name = document.getElementById('itemName').value.trim();
         const box = document.getElementById('history-box');
@@ -168,14 +176,11 @@
 
         const matches = db.filter(r => r.name.includes(name));
         if (matches.length > 0) {
-            const prices = matches.map(m => m.price);
-            const minPrice = Math.min(...prices);
-            const maxPrice = Math.max(...prices);
+            const ps = matches.map(m => m.price);
             const bestStore = matches.sort((a,b) => a.cp - b.cp)[0].store;
-            
-            box.innerHTML = `📍 歷史：$${minPrice} ~ $${maxPrice} | 推薦：${bestStore}`;
+            box.innerHTML = `📍 歷史：$${Math.min(...ps)} ~ $${Math.max(...ps)} | 推薦：${bestStore}`;
         } else {
-            box.innerHTML = "🔍 尚無此商品紀錄";
+            box.innerHTML = "🔍 尚無紀錄";
         }
     }
 
@@ -187,7 +192,7 @@
         document.getElementById('ocr-upload').value = '';
         document.getElementById('history-box').innerHTML = '';
         document.getElementById('ocr-status').innerText = '支援 中/日/英';
-        calculate();
+        document.getElementById('total').innerText = '$ 0';
     }
 </script>
 
