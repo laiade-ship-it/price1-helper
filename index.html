@@ -5,53 +5,48 @@ async function performOCR(input) {
         
         try {
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
-            const fullText = r.data.text;
-            const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 1);
+            const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
 
-            // 1. 價格邏輯：語意化過濾
-            const priceRegex = /([$¥]|NT\$)?\s?(\d{1,3}(,\d{3})*(\.\d+)?|\d+(\.\d+)?)/gi;
-            const matches = fullText.match(priceRegex) || [];
+            // --- 價格處理邏輯 ---
+            let finalPrice = "";
+            let priceCandidates = [];
             
-            const priceCandidates = matches.map(m => {
-                const clean = m.replace(/[^\d.]/g, '');
-                return {
-                    raw: m,
-                    val: parseFloat(clean),
-                    hasSymbol: /[$¥]|NT\$/i.test(m),
-                    digitLength: clean.split('.')[0].length
-                };
-            }).filter(c => 
-                c.val > 0 && 
-                c.digitLength <= 5 && // 排除條碼 (通常 > 5 位數)
-                !/\d{4}[/-]\d{2}[/-]\d{2}/.test(c.raw) // 排除日期格式
-            );
+            lines.forEach(line => {
+                const priceMatch = line.match(/([$¥]|NT\$)?\s?(\d{1,3}(,\d{3})*(\.\d+)?|\d+(\.\d+)?)/i);
+                if (priceMatch) {
+                    let val = parseFloat(priceMatch[0].replace(/[^\d.]/g, ''));
+                    let score = 0;
+                    if (/[$¥]|NT\$/i.test(line)) score += 100; // 有貨幣符號
+                    if (/特價|售價|優惠/i.test(line)) score += 200; // 關鍵字
+                    if (/原價|定價/i.test(line)) score += 50; // 原價權重較低
+                    if (/編號|No|碼|Tel|日期|202\d|Exp/i.test(line) || val > 10000) score -= 500; // 排除項目
+                    
+                    priceCandidates.push({ val, score });
+                }
+            });
 
-            // 決策：有符號優先；若無符號，取 10~5000 元間的最大值 (避開型號/年份)
-            let finalPriceObj = priceCandidates.find(c => c.hasSymbol);
-            if (!finalPriceObj) {
-                const reasonablePrices = priceCandidates.filter(c => c.val > 10 && c.val < 5000);
-                finalPriceObj = reasonablePrices.sort((a,b) => b.val - a.val)[0];
+            const bestPriceObj = priceCandidates.sort((a,b) => b.score - a.score)[0];
+            if (bestPriceObj && bestPriceObj.score > -100) {
+                document.getElementById('price').value = bestPriceObj.val;
             }
-            if (finalPriceObj) document.getElementById('price').value = finalPriceObj.val;
 
-            // 2. 名稱邏輯：排除功能性說明
-            const blacklist = ['產地', '地址', '電話', '日期', '保存', '有限', '公司', 'Tel', '份', '及', 'Ingredients', '配方'];
-            
-            const filteredLines = lines.map(line => {
+            // --- 名稱處理邏輯 ---
+            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', 'Tel', '成分', 'Ingredients'];
+            const nameCandidates = lines.map(line => {
+                let score = 0;
                 const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊\-/]/g, '');
-                const ratio = line.length > 0 ? textOnly.length / line.length : 0;
-                const hasBlacklist = blacklist.some(word => line.includes(word));
-                return { line, ratio, hasBlacklist, len: line.length };
-            }).filter(item => 
-                !item.hasBlacklist && 
-                item.ratio > 0.6 && // 文字比例需高於 60%
-                item.len >= 2 && item.len <= 20 // 排除雜訊或過長段落
-            );
+                const ratio = textOnly.length / line.length;
+                
+                if (blacklist.some(word => line.includes(word))) score -= 1000; // 黑名單
+                if (/[ml|g|入|鮮乳|瓶|包|罐]/i.test(line)) score += 100; // 商品特徵加分
+                if (ratio > 0.4) score += (ratio * 50); // 文字密度加分
+                
+                return { line, score, len: line.length };
+            }).filter(item => item.score > 0);
 
-            // 取篩選後比例最高的第一行
-            if (filteredLines.length > 0) {
-                const bestName = filteredLines.sort((a,b) => b.ratio - a.ratio)[0].line;
-                // 去除可能殘留的行末數字
+            if (nameCandidates.length > 0) {
+                // 取得分最高者，並移除行末純數字或價格
+                const bestName = nameCandidates.sort((a,b) => b.score - a.score)[0].line;
                 document.getElementById('itemName').value = bestName.replace(/[$¥NT\d,.]+$/g, '').trim();
             }
             
