@@ -7,50 +7,49 @@ async function performOCR(input) {
             const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
             const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            // --- 價格處理：實體完整性檢查 ---
+            // --- 價格處理：獨立語意實體判定 ---
             let priceCandidates = [];
+            // 只匹配獨立的 1-5 位數字，排除緊貼英文字母的型號
+            const strictPriceRegex = /(?:^|[\s$¥]|NT\$|價[:：])(\d{1,5}(?:[.,]\d{1,2})?)(?:\s|$)/i;
+
             lines.forEach(line => {
-                // 移除空格與常見符號後，看剩下的數字實體
-                const digitsOnly = line.replace(/[^0-9.]/g, '');
-                const hasCurrency = /[$¥]|NT\$/i.test(line);
-                
-                if (digitsOnly && !isNaN(digitsOnly)) {
-                    const val = parseFloat(digitsOnly);
-                    // 核心修正：若整行數字長度 > 5 位且無貨幣符號，視為編號或條碼，禁止切碎
-                    if (digitsOnly.length > 5 && !hasCurrency) return; 
-                    if (val > 10000 && !hasCurrency) return; // 除非帶有 $ 否則過萬不計
-                    
-                    let score = hasCurrency ? 200 : 50;
+                const match = line.match(strictPriceRegex);
+                if (match) {
+                    const val = parseFloat(match[1].replace(/,/g, ''));
+                    let score = /[$¥]|NT\$/i.test(line) ? 200 : 50;
                     if (/特價|售價|優惠/i.test(line)) score += 100;
+                    if (/原價|定價/i.test(line)) score += 20; // 優先級低於特價
                     if (/編號|No|碼|Tel|日期|202\d|Exp/i.test(line)) score -= 500;
-                    
-                    priceCandidates.push({ val, score });
+                    priceCandidates.push({ val, score, line });
                 }
             });
             const bestPrice = priceCandidates.sort((a,b) => b.score - a.score)[0];
             if (bestPrice && bestPrice.score > -100) document.getElementById('price').value = bestPrice.val;
 
-            // --- 名稱處理：相鄰高信度行合併 ---
-            const blacklist = ['公司', '產地', '保存', '日期', '有效', 'Tel', '成分', '網址', '地址'];
+            // --- 名稱處理：區段連續合併與即時終止 ---
+            const blacklist = ['公司', '產地', '地址', '保存', '日期', '有效', 'Tel', '成分', '網址', '總計', 'Total'];
             let nameBuffer = [];
-            
-            lines.forEach((line, index) => {
+            let stopMerging = false;
+
+            for (let line of lines) {
+                if (stopMerging) break;
+
+                const isPriceLine = strictPriceRegex.test(line);
                 const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊\-/]/g, '');
                 const ratio = line.length > 0 ? textOnly.length / line.length : 0;
                 const isBlacklisted = blacklist.some(word => line.includes(word));
-                
-                // 核心修正：判斷該行是否為可能的品名行
-                if (!isBlacklisted && ratio > 0.4 && line.length > 1) {
+
+                // 合併規則：文字比例達標且不是價格行、不是黑名單
+                if (!isBlacklisted && !isPriceLine && ratio > 0.4 && line.length > 1) {
                     nameBuffer.push(line.replace(/[$¥NT\d,.]+$/g, '').trim());
-                } else if (nameBuffer.length > 0) {
-                    // 如果遇到中斷行，且目前 buffer 已有品名，則停止收集（僅取第一組連續品名）
-                    // 這裡不 return，確保迴圈跑完，但我們只需要第一組連續品名
+                } else {
+                    // 終止條件：一旦品名區段開始後遇到不符條件的行，即停止合併
+                    if (nameBuffer.length > 0) stopMerging = true;
                 }
-            });
+            }
 
             if (nameBuffer.length > 0) {
-                // 合併前兩行最可能的品名（解決中英文拆行）
-                document.getElementById('itemName').value = nameBuffer.slice(0, 2).join(' ');
+                document.getElementById('itemName').value = nameBuffer.join(' ');
             }
             
             status.innerText = "✅ 辨識完成";
