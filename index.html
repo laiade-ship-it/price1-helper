@@ -3,51 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 終極穩定版</title>
+    <title>精準比價小幫手 - 歷史比價增強版</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; }
+        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; justify-content: center; color: #333; }
         .container { width: 100%; max-width: 480px; background: var(--card); padding: 20px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); box-sizing: border-box; }
         
-        /* 手機操作優化：防止縮放延遲與擴大點擊感應區 */
-        button, .tab-btn, .action-icon, .item-action, .ocr-upload-zone, .action-link { 
-            touch-action: manipulation; 
-            cursor: pointer; 
-        }
-
+        button, .tab-btn, .action-icon, .item-action, .ocr-upload-zone, .action-link { touch-action: manipulation; cursor: pointer; }
         .ocr-upload-zone { background: #fffbe6; border: 2px dashed #ffe58f; padding: 25px; border-radius: 18px; text-align: center; margin-bottom: 20px; }
         .ocr-status { font-size: 13px; color: #856404; font-weight: bold; margin-top: 10px; display: block; }
+        
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: bold; color: #666; }
         input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 12px; font-size: 16px; box-sizing: border-box; outline: none; }
         input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,144,226,0.1); }
         
-        button { width: 100%; padding: 14px; border: none; border-radius: 14px; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button { width: 100%; padding: 14px; border: none; border-radius: 14px; font-size: 16px; font-weight: bold; transition: 0.2s; margin-bottom: 10px; }
         .btn-save { background: var(--success); color: white; }
-        .btn-save:active { transform: scale(0.96); }
+        .btn-compare { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(74,144,226,0.2); }
+        .btn-save:active, .btn-compare:active { transform: scale(0.96); }
         .btn-clear { background: none; color: #999; font-size: 12px; margin-top: 20px; text-decoration: underline; }
 
+        /* 比價結果區塊 */
+        #comparison-area { margin-top: 15px; display: none; }
+        .compare-card { background: #f0f7ff; border: 1px solid #cce5ff; border-radius: 16px; padding: 15px; margin-bottom: 15px; }
+        .compare-item { background: white; border-radius: 10px; padding: 10px; margin-bottom: 8px; border-left: 4px solid #ddd; position: relative; }
+        .compare-item.best-cp { border-left-color: var(--warning); background: #fffdf0; box-shadow: 0 2px 8px rgba(241,196,15,0.2); }
+        .best-tag { position: absolute; right: 10px; top: 10px; background: var(--warning); color: #856404; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .unit-price { color: var(--danger); font-weight: bold; font-size: 14px; }
+
+        /* 原始分頁系統 */
         #store-tabs-container { margin-top: 25px; border-top: 2px solid #f0f0f0; padding-top: 20px; }
         .tab-headers { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; }
         .tab-headers::-webkit-scrollbar { display: none; }
         .tab-btn { background: #eee; padding: 10px 16px; border-radius: 20px; white-space: nowrap; font-size: 13px; font-weight: bold; flex-shrink: 0; display: flex; align-items: center; }
         .tab-btn.active { background: var(--primary); color: white; }
-        
-        /* 擴大 Hit Area */
         .hit-area { padding: 8px 12px; margin: -8px -4px; display: inline-flex; align-items: center; }
         .record-item { background: #fff; padding: 14px; border-radius: 14px; margin-bottom: 10px; border: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
         .record-info b { display: block; font-size: 15px; }
         .record-info small { color: #aaa; font-size: 11px; }
         .record-price { text-align: right; font-weight: 800; color: var(--primary); font-size: 18px; }
         .item-actions { margin-top: 8px; display: flex; gap: 15px; }
-        .action-link { color: var(--primary); font-size: 12px; font-weight: bold; padding: 5px 0; }
+        .action-link { color: var(--primary); font-size: 12px; font-weight: bold; }
         .action-link.delete { color: var(--danger); }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 精準比價助手</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 精準比價小幫手</h2>
+    
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size: 35px;">📸</span>
         <p style="margin:5px 0; font-weight:bold;">拍攝價格牌</p>
@@ -73,7 +78,19 @@
             <input type="number" id="count" value="1" inputmode="numeric">
         </div>
     </div>
+
     <button class="btn-save" id="btnSave">✅ 儲存此紀錄</button>
+    <button class="btn-compare" id="btnCompare">🔍 歷史比價 (CP值)</button>
+
+    <div id="comparison-area">
+        <div class="compare-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; color:#0056b3;">📊 比價分析結果</h4>
+                <span id="closeCompare" style="font-size:20px; cursor:pointer; opacity:0.5;">×</span>
+            </div>
+            <div id="compareList"></div>
+        </div>
+    </div>
 
     <div id="store-tabs-container">
         <div id="tab-headers" class="tab-headers"></div>
@@ -99,9 +116,10 @@ function setupEventListeners() {
     document.getElementById('ocrTrigger').addEventListener('click', () => document.getElementById('ocr-upload').click());
     document.getElementById('ocr-upload').addEventListener('change', e => performOCR(e.target));
     document.getElementById('btnSave').addEventListener('click', saveRecord);
+    document.getElementById('btnCompare').addEventListener('click', comparePrices);
+    document.getElementById('closeCompare').addEventListener('click', () => document.getElementById('comparison-area').style.display = 'none');
     document.getElementById('btnClearAll').addEventListener('click', clearData);
 
-    // 分頁事件委派
     document.getElementById('tab-headers').addEventListener('click', e => {
         const btn = e.target.closest('.tab-btn');
         const action = e.target.closest('[data-action]');
@@ -116,7 +134,6 @@ function setupEventListeners() {
         if(btn) renderTabs(btn.dataset.store);
     });
 
-    // 品項事件委派
     document.getElementById('tab-contents').addEventListener('click', e => {
         const action = e.target.closest('[data-item-action]');
         if(!action) return;
@@ -128,10 +145,87 @@ function setupEventListeners() {
     });
 }
 
+// 嚴格連續匹配算法 (Longest Common Substring length)
+function getLCSLength(s1, s2) {
+    if (!s1 || !s2) return 0;
+    let m = s1.length, n = s2.length;
+    let table = Array(m + 1).fill(0).map(() => Array(n + 1).fill(0));
+    let max = 0;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (s1[i - 1] === s2[j - 1]) {
+                table[i][j] = table[i - 1][j - 1] + 1;
+                max = Math.max(max, table[i][j]);
+            }
+        }
+    }
+    return max;
+}
+
+/**
+ * 歷史比價邏輯 (附加功能)
+ */
+function comparePrices() {
+    const query = document.getElementById('itemName').value.trim();
+    if (query.length < 1) return alert("請先輸入或辨識商品名稱");
+
+    let matches = [];
+    
+    // 遍歷所有歷史紀錄
+    Object.keys(storeData).forEach(store => {
+        storeData[store].forEach(item => {
+            const lcs = getLCSLength(query, item.name);
+            if (lcs >= 2) { // 門檻：連續 2 個字元相同
+                matches.push({
+                    ...item,
+                    store: store,
+                    matchScore: lcs,
+                    unitPrice: item.price / item.count
+                });
+            }
+        });
+    });
+
+    if (matches.length === 0) {
+        alert("找不到相似的歷史紀錄。");
+        document.getElementById('comparison-area').style.display = 'none';
+        return;
+    }
+
+    // 排序：匹配字數越高越前，若相同則 CP 值越高(單價越低)越前
+    matches.sort((a, b) => b.matchScore - a.matchScore || a.unitPrice - b.unitPrice);
+
+    // 找出最低單價者 (CP值最高)
+    const minUnitPrice = Math.min(...matches.map(m => m.unitPrice));
+
+    const listContainer = document.getElementById('compareList');
+    listContainer.innerHTML = matches.map(m => {
+        const isBest = m.unitPrice === minUnitPrice;
+        return `
+            <div class="compare-item ${isBest ? 'best-cp' : ''}">
+                ${isBest ? '<span class="best-tag">🏆 最推薦 (CP值最高)</span>' : ''}
+                <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)}</div>
+                <div style="font-size:12px; color:#666;">
+                    📍 ${escapeHtml(m.store)} | 📅 ${m.date}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:5px;">
+                    <small>價格: $${m.price} / 數量: ${m.count}</small>
+                    <span class="unit-price">單價: $${m.unitPrice.toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    document.getElementById('comparison-area').style.display = 'block';
+    document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ------------------ 保留原有核心邏輯 ------------------ */
+
 async function performOCR(input) {
     if(!input || !input.files || !input.files[0]) return;
     const status = document.getElementById('ocr-status');
-    status.innerText = "⏳ 辨識中...";
+    status.innerText = "⏳ 深度辨識中...";
     let worker;
     try {
         worker = await Tesseract.createWorker('chi_tra+eng');
@@ -139,7 +233,6 @@ async function performOCR(input) {
         const lines = (data.lines||[]).map(l=>l.text.trim()).filter(Boolean);
         let nameLines=[], priceCandidates=[];
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計)[:：\s]*([\d,]{2,7})/i;
-        
         lines.forEach(line=>{
             if(/[\u4e00-\u9fa5]/.test(line) && nameLines.length < 2 && !priceSemantic.test(line))
                 nameLines.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g,'').trim());
@@ -148,10 +241,7 @@ async function performOCR(input) {
             const pMatches = line.match(/\b\d{2,5}\b/g);
             if(pMatches) pMatches.forEach(m=>{ priceCandidates.push({val:parseInt(m), score:50}); });
         });
-        
-        // 修正後的排序邏輯
         priceCandidates.sort((a,b)=>b.score - a.score || b.val - a.val);
-        
         document.getElementById('itemName').value = nameLines.join(' ');
         document.getElementById('price').value = priceCandidates.length ? priceCandidates[0].val : '';
         status.innerText = "✅ 辨識完成";
@@ -165,28 +255,25 @@ function saveRecord() {
     const price = parseFloat(document.getElementById('price').value);
     const count = parseInt(document.getElementById('count').value) || 1;
     if(!name || isNaN(price)) return alert("請輸入完整的品名與價格");
-
     if(!storeData[store]) storeData[store] = [];
     storeData[store].push({ name, price, count, date: new Date().toLocaleDateString() });
     syncStorage();
     renderTabs(store);
     resetForm();
     alert("儲存成功！");
+    document.getElementById('comparison-area').style.display = 'none';
 }
 
 function renderTabs(activeStore = null) {
     const headers = document.getElementById('tab-headers');
     const contents = document.getElementById('tab-contents');
     const storeNames = Object.keys(storeData);
-
     if (storeNames.length === 0) {
         headers.innerHTML = "";
         contents.innerHTML = `<div style="text-align:center; color:#ccc; padding:40px 0;">尚未有紀錄</div>`;
         return;
     }
-
     if (!activeStore || !storeData[activeStore]) activeStore = storeNames[storeNames.length - 1];
-
     headers.innerHTML = storeNames.map(name => `
         <div class="tab-btn ${name === activeStore ? 'active' : ''}" data-store="${name}">
             ${escapeHtml(name)}
@@ -196,12 +283,10 @@ function renderTabs(activeStore = null) {
             ` : ''}
         </div>
     `).join('');
-
     const records = storeData[activeStore] || [];
     contents.innerHTML = records.slice().reverse().map((r, index) => {
         const actualIndex = records.length - 1 - index;
-        return `
-        <div class="record-item">
+        return `<div class="record-item">
             <div class="record-info">
                 <b>${escapeHtml(r.name)}</b>
                 <small>${r.date} · ${r.count}個</small>
@@ -219,21 +304,16 @@ function deleteItem(store, index) {
     if (!confirm("確定要刪除此筆紀錄嗎？")) return;
     storeData[store].splice(index, 1);
     let nextStore = store;
-    if (storeData[store].length === 0) {
-        delete storeData[store];
-        nextStore = null; // 讓 renderTabs 自動跳轉
-    }
-    syncStorage();
-    renderTabs(nextStore);
+    if (storeData[store].length === 0) { delete storeData[store]; nextStore = null; }
+    syncStorage(); renderTabs(nextStore);
 }
 
 function syncStorage() { localStorage.setItem('storeTabsData', JSON.stringify(storeData)); }
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-function resetForm() { document.getElementById('itemName').value = ''; document.getElementById('price').value = ''; }
-function clearData() { if(confirm("確定清空嗎？")) { localStorage.clear(); location.reload(); } }
-// 其餘 renameStore, editItem, deleteStore 邏輯與先前一致...
+function resetForm() { document.getElementById('itemName').value = ''; document.getElementById('price').value = ''; document.getElementById('count').value = '1'; }
+function clearData() { if(confirm("確定清空所有資料？")) { localStorage.clear(); location.reload(); } }
 function renameStore(old) { const n = prompt("新名稱：", old); if(n && n.trim() && !storeData[n.trim()]) { storeData[n.trim()] = storeData[old]; delete storeData[old]; syncStorage(); renderTabs(n.trim()); } }
-function deleteStore(s) { if(confirm(`刪除 ${s}？`)) { delete storeData[s]; syncStorage(); renderTabs(); } }
+function deleteStore(s) { if(confirm(`刪除商店 ${s}？`)) { delete storeData[s]; syncStorage(); renderTabs(); } }
 function editItem(s, i) { 
     const item = storeData[s][i];
     const n = prompt("名稱：", item.name);
