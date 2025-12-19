@@ -1,59 +1,34 @@
-async function performOCR(input) {
-    if (!input.files || !input.files[0]) return;
-    const status = document.getElementById('ocr-status');
-    status.innerText = "⌛ 辨識中...";
-    
-    try {
-        const r = await Tesseract.recognize(input.files[0], 'chi_tra+jpn+eng');
-        const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+lines.forEach(line => {
+    // 1. 定義語意標記
+    const hasPriceSemantic = /([$¥]|NT\$|特價|售價|原價|金額|總計|Total)/i.test(line);
+    const hasAttribute = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X)/i.test(line);
 
-        let priceCandidates = [];
-        // 1. 擴充屬性排除正則：包含中文單位詞
-        // 匹配：數字 + (ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|次|x|X|pc|pack)
-        const attributeRegex = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|次|x|X|pc|pack|oz|盎司)/gi;
-        
-        // 2. 語意行判定正則
+    // --- 【二、強制實作】封鎖屬性主體行 ---
+    // 規則：命中單位且無價格語意，該行直接剔除，不允許進入任何後續數字解析
+    if (hasAttribute && !hasPriceSemantic) return; 
+
+    let foundPrice = false;
+
+    // --- 【三、不可違反】語意價格提取 ---
+    if (hasPriceSemantic) {
         const semanticPriceRegex = /([$¥]|NT\$|價[:：])\s?(\d{1,5}(?:[.,]\d{1,2})?)/gi;
-        const pureNumberRegex = /(?:\s|^)(\d{1,5})(?:\s|$)/g;
+        let sMatch;
+        while ((sMatch = semanticPriceRegex.exec(line)) !== null) {
+            priceCandidates.push({ val: parseFloat(sMatch[2].replace(/,/g, '')), score: 300 });
+            foundPrice = true;
+        }
 
-        lines.forEach(line => {
-            // --- 步驟 A：語意行檢查 ---
-            const hasPriceKeyword = /[$¥]|NT\$|特價|售價|原價|金額|總計|Total/i.test(line);
-            if (!hasPriceKeyword) return; // 沒有價格語意，整行不產生價格
-
-            // --- 步驟 B：屬性排除 (含中文單位) ---
-            // 先將 936毫升、2入 等實體從字串中移除，防止干擾價格解析
-            const cleanLine = line.replace(attributeRegex, '[ATTR]');
-
-            // --- 步驟 C：按位置提取價格 ---
-            // 優先取緊跟在符號或關鍵字後的數字
-            let match;
-            let foundInLine = false;
-            while ((match = semanticPriceRegex.exec(line)) !== null) {
-                priceCandidates.push({ val: parseFloat(match[2].replace(/,/g, '')), score: 300 });
-                foundInLine = true;
-            }
-
-            // 若無明確符號，取 cleanLine 中剩餘的孤立數字（需排除長編號）
-            if (!foundInLine) {
-                let pureMatch;
-                while ((pureMatch = pureNumberRegex.exec(cleanLine)) !== null) {
-                    const val = parseFloat(pureMatch[1]);
-                    if (pureMatch[1].length > 5) continue; // 排除長編號
-                    priceCandidates.push({ val, score: 100 });
+        // --- 【三、不可違反】限制級 Fallback ---
+        // 條件：必須是價格行，且絕對不允許有屬性單位干擾
+        if (!foundPrice && !hasAttribute) {
+            const pureNumberRegex = /(?:\s|^)(\d{1,5})(?:\s|$)/g;
+            let pMatch;
+            while ((pMatch = pureNumberRegex.exec(line)) !== null) {
+                if (pMatch[1].length <= 5) {
+                    priceCandidates.push({ val: parseFloat(pMatch[1]), score: 100 });
                 }
             }
-        });
-
-        const bestPrice = priceCandidates.sort((a,b) => b.score - a.score)[0];
-        if (bestPrice) document.getElementById('price').value = bestPrice.val;
-
-        // --- 名稱合併邏輯 (略，維持區段終止規則) ---
-        // ... (省略部分代碼以聚焦價格邏輯) ...
-
-        status.innerText = "✅ 辨識完成";
-        calculate();
-    } catch (e) {
-        status.innerText = "❌ 辨識失敗";
+        }
     }
-}
+    // 非價格語意行（!hasPriceSemantic）且非屬性行時，直接忽略，不執行數字提取
+});
