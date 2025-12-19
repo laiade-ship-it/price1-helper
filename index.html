@@ -1,34 +1,65 @@
-lines.forEach(line => {
-    // 1. 定義語意標記
-    const hasPriceSemantic = /([$¥]|NT\$|特價|售價|原價|金額|總計|Total)/i.test(line);
-    const hasAttribute = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X)/i.test(line);
+async function performOCR(input) {
+    if (!input.files || !input.files[0]) return;
+    const r = await Tesseract.recognize(input.files[0], 'chi_tra+eng');
+    const lines = r.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-    // --- 【二、強制實作】封鎖屬性主體行 ---
-    // 規則：命中單位且無價格語意，該行直接剔除，不允許進入任何後續數字解析
-    if (hasAttribute && !hasPriceSemantic) return; 
+    let priceCandidates = [];
+    let nameBuffer = [];
+    let stopNameMerging = false;
 
-    let foundPrice = false;
+    // 定義強大的屬性排除正則 (單位必須緊接數字)
+    const attributeRegex = /\d+\s?(ml|毫升|g|公克|克|kg|公斤|入|包|瓶|罐|oz|盎司|入組|x|X|pc|pack)/gi;
+    // 定義雜訊正則 (型號：英文數字緊貼)
+    const modelNoiseRegex = /[a-z]+\d+|\d+[a-z]+/gi;
+    // 定義價格語意提取 (必須緊接關鍵字或符號)
+    const semanticPriceRegex = /(?:[$¥]|NT\$|特價|售價|原價|金額|總計|Total)[:：\s]*(\d{1,5}(?:[.,]\d{1,2})?)/gi;
+    const blacklist = ['公司', '地址', '保存', '日期', '有效', '編號', 'No', '產地'];
 
-    // --- 【三、不可違反】語意價格提取 ---
-    if (hasPriceSemantic) {
-        const semanticPriceRegex = /([$¥]|NT\$|價[:：])\s?(\d{1,5}(?:[.,]\d{1,2})?)/gi;
-        let sMatch;
-        while ((sMatch = semanticPriceRegex.exec(line)) !== null) {
-            priceCandidates.push({ val: parseFloat(sMatch[2].replace(/,/g, '')), score: 300 });
-            foundPrice = true;
-        }
+    lines.forEach((line, index) => {
+        // --- A. 價格語意判定 ---
+        const hasPriceKeyword = /[$¥]|NT\$|特價|售價|原價|金額|總計|Total/i.test(line);
+        const hasAttribute = attributeRegex.test(line);
 
-        // --- 【三、不可違反】限制級 Fallback ---
-        // 條件：必須是價格行，且絕對不允許有屬性單位干擾
-        if (!foundPrice && !hasAttribute) {
-            const pureNumberRegex = /(?:\s|^)(\d{1,5})(?:\s|$)/g;
-            let pMatch;
-            while ((pMatch = pureNumberRegex.exec(line)) !== null) {
-                if (pMatch[1].length <= 5) {
-                    priceCandidates.push({ val: parseFloat(pMatch[1]), score: 100 });
-                }
+        // 規則 1：【封鎖屬性主體行】若有單位但無價格標籤，此行不產生價格
+        if (hasAttribute && !hasPriceKeyword) {
+            /* Skip Price Extraction for this line */
+        } else if (hasPriceKeyword) {
+            // 規則 2：【精準提取】優先提取緊跟在語意標籤後的數字
+            let match;
+            while ((match = semanticPriceRegex.exec(line)) !== null) {
+                let val = parseFloat(match[1].replace(/,/g, ''));
+                let score = 100;
+                if (/特價|Total|[$¥]/i.test(match[0])) score += 200; // 權重：特價/Total 優先
+                if (/原價/i.test(match[0])) score -= 50; // 原價降權
+                priceCandidates.push({ val, score });
+            }
+            
+            // 規則 3：【 fallback 限制】若沒匹配到帶標籤數字，且無單位干擾，才取行尾數字
+            if (priceCandidates.length === 0 && !hasAttribute) {
+                const tailNumberMatch = line.match(/(?:\s|^)(\d{1,5})(?:\s|$)/);
+                if (tailNumberMatch) priceCandidates.push({ val: parseFloat(tailNumberMatch[1]), score: 50 });
             }
         }
-    }
-    // 非價格語意行（!hasPriceSemantic）且非屬性行時，直接忽略，不執行數字提取
-});
+
+        // --- B. 品名合併邏輯 (中斷規則) ---
+        if (!stopNameMerging) {
+            const isBlacklisted = blacklist.some(word => line.includes(word));
+            const textOnly = line.replace(/[\d\s,.$¥NT:：xX*＊\-/]/g, '');
+            const ratio = line.length > 0 ? textOnly.length / line.length : 0;
+
+            // 終止條件：遇到價格語意行、長數字行或黑名單行，立即停止品名收集
+            if (hasPriceKeyword || isBlacklisted || /\d{10,}/.test(line)) {
+                stopNameMerging = true;
+            } else if (ratio > 0.3 && line.length > 1) {
+                // 排除型號與容量後的文字，作為品名
+                let cleanName = line.replace(attributeRegex, '').replace(modelNoiseRegex, '').trim();
+                if (cleanName) nameBuffer.push(cleanName);
+            }
+        }
+    });
+
+    // 輸出結果
+    const bestPrice = priceCandidates.sort((a, b) => b.score - a.score)[0];
+    document.getElementById('price').value = bestPrice ? bestPrice.val : "";
+    document.getElementById('itemName').value = nameBuffer.join(' ');
+}
