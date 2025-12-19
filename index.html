@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>價格計算小幫手</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f5f7fa;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-size: 14px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px; /* 防止 iPhone 縮放 */
+        }
+        .result-area {
+            background: #f0f7ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .result-label {
+            font-size: 14px;
+            color: #555;
+        }
+        .result-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 5px 0;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:active {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>💰 價格計算器</h2>
+    
+    <div class="input-group">
+        <label>單價 (元)</label>
+        <input type="number" id="price" placeholder="請輸入金額" oninput="calculate()">
+    </div>
+
+    <div class="input-group">
+        <label>數量</label>
+        <input type="number" id="count" value="1" oninput="calculate()">
+    </div>
+
+    <div class="input-group">
+        <label>折扣 (例如 0.9 表示 9 折)</label>
+        <input type="number" id="discount" value="1" step="0.01" oninput="calculate()">
+    </div>
+
+    <div class="result-area">
+        <div class="result-label">計算結果</div>
+        <div class="result-value" id="total">$ 0</div>
+    </div>
+
+    <button onclick="resetForm()">重設內容</button>
+</div>
+
+<script>
+    function calculate() {
+        const price = document.getElementById('price').value;
+        const count = document.getElementById('count').value;
+        const discount = document.getElementById('discount').value;
+        
+        if (price && count) {
+            let total = price * count * discount;
+            // 四捨五入到整數
+            document.getElementById('total').innerText = '$ ' + Math.round(total).toLocaleString();
+        } else {
+            document.getElementById('total').innerText = '$ 0';
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('price').value = '';
+        document.getElementById('count').value = '1';
+        document.getElementById('discount').value = '1';
+        calculate();
+    }
+</script>
+
+</body>
+</html>
