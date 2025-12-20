@@ -3,22 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 基準版 V3.3 🔒</title>
+    <title>精準比價小幫手 - 基準版 V3.4 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        /* --------------------
-        ⚠️ 基準版 V3.3 鎖定規範
-        ❌ 核心功能禁止修改：
-        - 單位 datalist 與 refreshUnitDatalist()
-        - 儲存邏輯 saveRecord()
-        - 分頁渲染 renderTabs()
-        - LCS 比對 getLCSLength() & comparePrices()
-        - OCR 辨識 performOCR()
-        ✅ 可修改範圍：
-        - CSS 樣式、字型、顏色、間距
-        - 按鈕文字或 emoji
-        - placeholder 或非核心 input 欄位
-        -------------------- */
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
         .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; }
@@ -50,7 +37,7 @@
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (基準版 V3.3 🔒)</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (基準版 V3.4 🔒)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
@@ -79,7 +66,7 @@
         </div>
         <div class="input-group" style="flex:1;">
             <label>📏 單位</label>
-            <input list="unit-options" id="unit" placeholder="單位" value="入" 
+            <input list="unit-options" id="unit" placeholder="入" 
                    onclick="this.select();" autocomplete="off">
             <datalist id="unit-options"></datalist>
         </div>
@@ -111,9 +98,7 @@
 </div>
 
 <script>
-/* --------------------
-⚠️ 核心鎖定提示：不可改動此區函數
--------------------- */
+/* 🔒 核心鎖定區：OCR, LCS, Compare (V3.4) */
 let storeData = {};
 let currentActiveStore = null;
 let unitList = [];
@@ -160,7 +145,7 @@ function getLCSLength(s1, s2) {
 
 function comparePrices() {
     const query = document.getElementById('itemName').value.trim();
-    const currentUnit = document.getElementById('unit').value.trim();
+    const currentUnit = document.getElementById('unit').value.trim() || "入"; // 補位處理
     if (query.length < 1) return alert("請先輸入品名");
     let matches = [];
     Object.keys(storeData).forEach(store => {
@@ -209,6 +194,7 @@ function saveRecord() {
     const name = document.getElementById('itemName').value.trim();
     const price = parseFloat(document.getElementById('price').value);
     const count = parseInt(document.getElementById('count').value) || 1;
+    // 關鍵修正：若欄位為空，則預設儲存為 "入"
     const unit = document.getElementById('unit').value.trim() || "入";
     const remark = document.getElementById('remark').value.trim();
     if (!name || isNaN(price)) return alert("請輸入完整資料");
@@ -258,7 +244,6 @@ function renderTabs(activeStore = null) {
     });
 }
 
-/* 🟢 可改區域 - UI 輔助函數 */
 function deleteRecord(store, index) {
     if (confirm("確定刪除這筆紀錄？")) {
         storeData[store].splice(index, 1);
@@ -274,7 +259,7 @@ function resetInputs() {
     document.getElementById('itemName').value = ''; 
     document.getElementById('price').value = ''; 
     document.getElementById('remark').value = '';
-    document.getElementById('unit').value = '入';
+    document.getElementById('unit').value = ''; // 重設為空，顯示 placeholder
     document.getElementById('count').value = '1';
     document.getElementById('comparison-area').style.display = 'none'; 
 }
