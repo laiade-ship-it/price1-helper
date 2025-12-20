@@ -3,9 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 終極穩定版 V3.3</title>
+    <title>精準比價小幫手 - 基準版 V3.3 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
+        /* --------------------
+        ⚠️ 基準版 V3.3 鎖定規範
+        ❌ 核心功能禁止修改：
+        - 單位 datalist 與 refreshUnitDatalist()
+        - 儲存邏輯 saveRecord()
+        - 分頁渲染 renderTabs()
+        - LCS 比對 getLCSLength() & comparePrices()
+        - OCR 辨識 performOCR()
+        ✅ 可修改範圍：
+        - CSS 樣式、字型、顏色、間距
+        - 按鈕文字或 emoji
+        - placeholder 或非核心 input 欄位
+        -------------------- */
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
         .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; }
@@ -37,7 +50,7 @@
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (基準版 V3.3 🔒)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
@@ -67,8 +80,7 @@
         <div class="input-group" style="flex:1;">
             <label>📏 單位</label>
             <input list="unit-options" id="unit" placeholder="單位" value="入" 
-                   onclick="this.select();" 
-                   autocomplete="off">
+                   onclick="this.select();" autocomplete="off">
             <datalist id="unit-options"></datalist>
         </div>
     </div>
@@ -99,12 +111,14 @@
 </div>
 
 <script>
+/* --------------------
+⚠️ 核心鎖定提示：不可改動此區函數
+-------------------- */
 let storeData = {};
 let currentActiveStore = null;
 let unitList = [];
-const DEFAULT_UNITS = ["顆", "個", "克", "毫升", "c.c.", "包", "袋", "瓶", "入", "公升"];
+const DEFAULT_UNITS = ["顆","個","克","毫升","c.c.","包","袋","瓶","入","公升"];
 
-/** 1. 還原原始 OCR 辨識邏輯並加入價格過濾 (維持原樣) */
 async function performOCR(input) {
     if (!input.files[0]) return;
     const status = document.getElementById('ocr-status');
@@ -132,7 +146,6 @@ async function performOCR(input) {
     } catch (e) { status.innerText = "❌ 辨識失敗"; } finally { if (worker) await worker.terminate(); }
 }
 
-/** 2. 核心 LCS 算法 (維持原樣) */
 function getLCSLength(s1, s2) {
     if (!s1 || !s2) return 0;
     let m = s1.length, n = s2.length, max = 0;
@@ -145,7 +158,6 @@ function getLCSLength(s1, s2) {
     return max;
 }
 
-/** 3. 修改比價邏輯：防止異單位誤比 (維持原樣) */
 function comparePrices() {
     const query = document.getElementById('itemName').value.trim();
     const currentUnit = document.getElementById('unit').value.trim();
@@ -176,14 +188,12 @@ function comparePrices() {
                     <small>${m.count} ${escapeHtml(itemUnit)} (單價: $${m.unitPrice.toFixed(2)})</small>
                     <span class="total-price-display">總價: $${m.price}</span>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
     document.getElementById('comparison-area').style.display = 'block';
     document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
 }
 
-/** 4. 單位 DataList 刷新邏輯 (回歸穩定版) */
 function refreshUnitDatalist() {
     const dl = document.getElementById('unit-options');
     let usedUnits = [];
@@ -214,29 +224,6 @@ function saveRecord() {
     resetInputs();
 }
 
-function deleteRecord(store, index) {
-    if (confirm("確定刪除這筆紀錄？")) {
-        storeData[store].splice(index, 1);
-        if (storeData[store].length === 0) { delete storeData[store]; currentActiveStore = Object.keys(storeData)[0] || null; }
-        else { currentActiveStore = store; }
-        saveToStorage();
-        refreshUnitDatalist();
-        renderTabs(currentActiveStore);
-    }
-}
-
-function saveToStorage() { localStorage.setItem('storeTabsData', JSON.stringify(storeData)); }
-function resetInputs() { 
-    document.getElementById('itemName').value = ''; 
-    document.getElementById('price').value = ''; 
-    document.getElementById('remark').value = '';
-    document.getElementById('unit').value = '入';
-    document.getElementById('count').value = '1';
-    document.getElementById('comparison-area').style.display = 'none'; 
-}
-function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-
-/** 5. 事件綁定與分頁渲染 (維持原樣) */
 function renderTabs(activeStore = null) {
     currentActiveStore = activeStore;
     const headers = document.getElementById('tab-headers');
@@ -264,13 +251,34 @@ function renderTabs(activeStore = null) {
                     <br><a class="action-link delete" data-store="${currentActiveStore}" data-idx="${originalIndex}">刪除</a>
                 </div>
                 <div class="record-price">$${r.price}</div>
-            </div>
-        `;
+            </div>`;
     }).join('');
     document.querySelectorAll('.action-link.delete').forEach(link => {
         link.addEventListener('click', (e) => { deleteRecord(e.target.dataset.store, parseInt(e.target.dataset.idx)); });
     });
 }
+
+/* 🟢 可改區域 - UI 輔助函數 */
+function deleteRecord(store, index) {
+    if (confirm("確定刪除這筆紀錄？")) {
+        storeData[store].splice(index, 1);
+        if (storeData[store].length === 0) { delete storeData[store]; currentActiveStore = Object.keys(storeData)[0] || null; }
+        else { currentActiveStore = store; }
+        saveToStorage();
+        refreshUnitDatalist();
+        renderTabs(currentActiveStore);
+    }
+}
+function saveToStorage() { localStorage.setItem('storeTabsData', JSON.stringify(storeData)); }
+function resetInputs() { 
+    document.getElementById('itemName').value = ''; 
+    document.getElementById('price').value = ''; 
+    document.getElementById('remark').value = '';
+    document.getElementById('unit').value = '入';
+    document.getElementById('count').value = '1';
+    document.getElementById('comparison-area').style.display = 'none'; 
+}
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
 window.onload = () => {
     unitList = JSON.parse(localStorage.getItem('managedUnits')) || [];
@@ -284,7 +292,7 @@ window.onload = () => {
     document.getElementById('btnSave').addEventListener('click', saveRecord);
     document.getElementById('btnCompare').addEventListener('click', comparePrices);
     document.getElementById('closeCompare').addEventListener('click', () => document.getElementById('comparison-area').style.display = 'none');
-    document.getElementById('btnClearAll').addEventListener('click', () => { if(confirm("清空？")) { localStorage.clear(); location.reload(); }});
+    document.getElementById('btnClearAll').addEventListener('click', () => { if(confirm("清空所有資料？")){ localStorage.clear(); location.reload(); }});
     refreshUnitDatalist();
     renderTabs();
 };
