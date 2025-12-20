@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - V3.6 🔒</title>
+    <title>精準比價小幫手 - 基準版 V3.5 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -35,7 +35,7 @@
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.6 🔒)</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (基準版 V3.5 🔒)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
@@ -94,7 +94,7 @@
 </div>
 
 <script>
-/* 🔒 核心鎖定區：OCR, LCS, Compare */
+/* 🔒 核心鎖定區：OCR, LCS, Compare (V3.5) */
 let storeData = {};
 let currentActiveStore = null;
 let unitList = [];
@@ -172,13 +172,11 @@ function comparePrices(){
     document.getElementById('comparison-area').style.display='block';
 }
 
-/* 📏 V3.6 混合單位管理系統 */
 function refreshUnitSelect(targetValue = null) {
     const sel = document.getElementById('unitSelect');
     let usedUnits = [];
     Object.values(storeData).forEach(storeItems => storeItems.forEach(item => { if(item.unit) usedUnits.push(item.unit); }));
     let combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList, ...usedUnits]));
-    
     let html = combined.map(u => `<option value="${u}" ${u === targetValue ? 'selected' : ''}>${u}</option>`).join('');
     html += `<option value="ADD_NEW" style="color:var(--primary); font-weight:bold;">➕ 新增單位...</option>`;
     sel.innerHTML = html;
