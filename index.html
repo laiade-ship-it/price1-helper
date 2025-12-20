@@ -68,8 +68,7 @@
             <label>📏 單位</label>
             <input list="unit-options" id="unit" placeholder="單位" value="入">
             <datalist id="unit-options">
-                <option value="C.C."><option value="入"><option value="個"><option value="瓶"><option value="袋"><option value="包"><option value="毫升"><option value="公升"><option value="顆"><option value="粒"><option value="盒">
-            </datalist>
+                </datalist>
         </div>
     </div>
 
@@ -101,8 +100,11 @@
 <script>
 let storeData = {};
 let currentActiveStore = null;
+// 修改點：新增單位管理列表
+let unitList = [];
+const DEFAULT_UNITS = ["顆", "個", "克", "毫升", "c.c.", "包", "袋", "瓶", "入", "公升"];
 
-/** 1. 還原原始 OCR 辨識邏輯並加入價格過濾 */
+/** 1. 還原原始 OCR 辨識邏輯並加入價格過濾 (維持原樣) */
 async function performOCR(input) {
     if (!input.files[0]) return;
     const status = document.getElementById('ocr-status');
@@ -117,7 +119,6 @@ async function performOCR(input) {
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格)[:：\s]*([\d,]{2,7})/i;
 
         lines.forEach(line => {
-            // 價格辨識
             const sMatch = line.match(priceSemantic);
             if (sMatch) {
                 priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
@@ -126,11 +127,10 @@ async function performOCR(input) {
             if (pMatches) {
                 pMatches.forEach(m => {
                     const v = parseInt(m);
-                    if (v > 15) priceCandidates.push({ val: v, score: 50 }); // 過濾掉 12入、8瓶等數量
+                    if (v > 15) priceCandidates.push({ val: v, score: 50 });
                 });
             }
 
-            // [還原核心防線] 品名辨識：必須有中文、排除純數字行、排除價格行
             if (/[\u4e00-\u9fa5]/.test(line) && 
                 nameLines.length < 2 && 
                 !priceSemantic.test(line) && 
@@ -167,7 +167,7 @@ function getLCSLength(s1, s2) {
     return max;
 }
 
-/** 3. 修改比價邏輯：防止異單位誤比 */
+/** 3. 修改比價邏輯：防止異單位誤比 (維持原樣) */
 function comparePrices() {
     const query = document.getElementById('itemName').value.trim();
     const currentUnit = document.getElementById('unit').value.trim();
@@ -187,7 +187,6 @@ function comparePrices() {
 
     matches.sort((a, b) => b.matchScore - a.matchScore || a.unitPrice - b.unitPrice);
     
-    // [邏輯隔離] 只有跟目前單位一致的，才能參與「歷史最推」排名
     const sameUnitMatches = matches.filter(m => (m.unit || '入') === currentUnit);
     const minUnitPrice = sameUnitMatches.length > 0 ? Math.min(...sameUnitMatches.map(m => m.unitPrice)) : null;
 
@@ -215,6 +214,20 @@ function comparePrices() {
     document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
 }
 
+// 修改點：新增單位列表管理功能
+function refreshUnitDatalist() {
+    const dl = document.getElementById('unit-options');
+    // 取得所有目前已儲存紀錄中出現過的單位，與預設值/手動值取聯集
+    let usedUnits = [];
+    Object.values(storeData).forEach(storeItems => {
+        storeItems.forEach(item => { if(item.unit) usedUnits.push(item.unit); });
+    });
+    
+    // 合併：預設 + localStorage 手動新增 + 實際紀錄中使用的單位
+    let combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList, ...usedUnits]));
+    dl.innerHTML = combined.map(u => `<option value="${u}">`).join('');
+}
+
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類商店";
     const name = document.getElementById('itemName').value.trim();
@@ -225,9 +238,16 @@ function saveRecord() {
     
     if (!name || isNaN(price)) return alert("請輸入完整資料");
     
+    // 修改點：自動偵測並新增單位
+    if (!DEFAULT_UNITS.includes(unit) && !unitList.includes(unit)) {
+        unitList.push(unit);
+        localStorage.setItem('managedUnits', JSON.stringify(unitList));
+    }
+
     if (!storeData[store]) storeData[store] = [];
     storeData[store].push({ name, price, count, unit, remark, date: new Date().toLocaleDateString() });
     saveToStorage();
+    refreshUnitDatalist(); // 更新下拉清單
     renderTabs(store);
     resetInputs();
 }
@@ -242,6 +262,7 @@ function deleteRecord(store, index) {
             currentActiveStore = store;
         }
         saveToStorage();
+        refreshUnitDatalist(); // 刪除後同步更新下拉選單狀態
         renderTabs(currentActiveStore);
     }
 }
@@ -255,7 +276,7 @@ function resetInputs() {
 }
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-/** 4. 事件綁定優化：解決手機 onclick 吃字問題 */
+/** 4. 事件綁定優化 (維持原樣) */
 function renderTabs(activeStore = null) {
     currentActiveStore = activeStore;
     const headers = document.getElementById('tab-headers');
@@ -305,7 +326,9 @@ function renderTabs(activeStore = null) {
 }
 
 window.onload = () => {
-    // [Schema Migration] 安全補完新欄位，不覆蓋舊值
+    // 讀取單位清單
+    unitList = JSON.parse(localStorage.getItem('managedUnits')) || [];
+    
     const rawData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
     Object.keys(rawData).forEach(s => {
         rawData[s] = rawData[s].map(item => ({
@@ -324,6 +347,7 @@ window.onload = () => {
     document.getElementById('closeCompare').addEventListener('click', () => document.getElementById('comparison-area').style.display = 'none');
     document.getElementById('btnClearAll').addEventListener('click', () => { if(confirm("清空？")) { localStorage.clear(); location.reload(); }});
     
+    refreshUnitDatalist(); // 初始化單位下拉清單
     renderTabs();
 };
 </script>
