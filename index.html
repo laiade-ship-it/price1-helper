@@ -3,7 +3,7 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-   <title>精準比價小幫手 - V3.6.1 (Powered by V3.9 Logic) 🔒</title>
+   <title>精準比價小幫手 - V3.6.1 (Powered by V3.9+ Logic) 🔒</title>
    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
    <style>
        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -39,13 +39,13 @@
 <body>
 <div class="container">
    <div class="designer-credit">設計者：Lai Ade</div>
-   <h2 style="text-align:center; margin:10px 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.6.1 + V3.9 引擎)</h2>
+   <h2 style="text-align:center; margin:10px 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.6.1 + V3.9+ 引擎)</h2>
     
    <div class="ocr-upload-zone" id="ocrTrigger">
        <span style="font-size:35px;">📸</span>
        <p style="margin:5px 0; font-weight:bold;">拍攝價格牌</p>
        <input type="file" id="ocr-upload" accept="image/*" style="display:none">
-       <span id="ocr-status" class="ocr-status">支援 V3.9 漏斗式辨識邏輯</span>
+       <span id="ocr-status" class="ocr-status">支援 V3.9+ 視覺高度優先演算法</span>
    </div>
 
    <div class="input-group"><label>🏪 商店名稱</label><input type="text" id="storeName" placeholder="例如：全聯、好市多"></div>
@@ -73,7 +73,7 @@ function updateLivePrice() {
    const u = document.getElementById('unitSelect').value;
    const status = document.getElementById('ocr-status');
    if (p > 0) status.innerText = `💡 即時單價：$${(p/c).toFixed(2)} / ${u}`;
-   else status.innerText = "支援 V3.9 漏斗式辨識邏輯";
+   else status.innerText = "支援 V3.9+ 視覺高度優先演算法";
 }
 
 function ocrPostProcessor(text) {
@@ -87,65 +87,75 @@ function ocrPostProcessor(text) {
 async function performOCR(input) {
    if (!input.files[0]) return;
    const status = document.getElementById('ocr-status');
-   status.innerText = "⏳ 深度辨識中...";
+   status.innerText = "⏳ 視覺權重分析中...";
    let worker;
    try {
        worker = await Tesseract.createWorker('chi_tra+eng');
+       // 請求完整數據以獲取 bbox (座標與高度)
        const { data } = await worker.recognize(input.files[0]);
-       const lines = (data.lines || []).map(l => l.text.trim()).filter(Boolean);
        
-       let nameLines = [], priceCandidates = [];
+       let nameCandidates = [];
+       let priceCandidates = [];
        
-       // --- V3.9 漏斗式架構邏輯 ---
        const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格|安心價|平均[:：\s]*\d件)[:：\s]*([\d,]{2,7})/i;
-       const unitPriceFilter = /[\/每]|100g|1pc|1ml|1kg/i; // 排除單位價關鍵字
-       const dateFilter = /\d{1,2}[\/\-]\d{1,2}/; // 排除日期格式
-       const barcodeFilter = /\d{8,}/; // 排除長條碼
+       const unitFilter = /[\/每]|100g|1ml|1kg|[\d.]+\s*元/i;
+       const barcodeFilter = /\d{8,}/;
 
-       lines.forEach(line => {
-           const cleanLine = ocrPostProcessor(line);
-           
-           // 第一層：硬過濾 (排除長條碼與日期區間)
-           if (barcodeFilter.test(cleanLine) || dateFilter.test(cleanLine)) return;
+       data.lines.forEach(line => {
+           const text = ocrPostProcessor(line.text);
+           const height = line.bbox.y1 - line.bbox.y0; // 核心：計算文字高度
 
-           // 第二層：標記與權重分配
-           const sMatch = cleanLine.match(priceSemantic);
+           // --- 價格過濾邏輯 ---
+           // 排除小數點 (防止 22.73 誤抓 73)
+           if (text.includes('.') && /\d+\.\d+/.test(text)) return; 
+           // 排除長條碼
+           if (barcodeFilter.test(text)) return;
+
+           const sMatch = text.match(priceSemantic);
            if (sMatch) {
-               // 偵測到「特價」、「安心價」、「平均」等關鍵字給予最高權重 150
-               let weight = (/特價|安心價|平均/.test(cleanLine)) ? 150 : 100;
-               // 如果該行包含單位價特徵（如 / ），則降低該數字權重或剔除
-               if (unitPriceFilter.test(cleanLine)) weight = 10; 
-               priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: weight });
+               let score = 100 + height; // 語義匹配 + 視覺權重
+               if (/特價|安心價|平均/.test(text)) score += 50;
+               priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: score });
            }
 
-           const pMatches = cleanLine.match(/\b\d{2,5}\b/g);
+           const pMatches = text.match(/\b\d{2,5}\b/g);
            if (pMatches) {
                pMatches.forEach(m => {
                    const v = parseInt(m);
-                   // 只有在不是日期、不是條碼、且該行不含單位價符號時才作為裸數字候選
-                   if (v > 15 && !unitPriceFilter.test(cleanLine)) {
-                       priceCandidates.push({ val: v, score: 50 });
+                   // 排除單位價干擾行
+                   if (v > 15 && !unitFilter.test(text)) {
+                       priceCandidates.push({ val: v, score: height }); 
                    }
                });
            }
 
-           // 品名擷取（維持 V3.6.1 邏輯）
-           if (/[\u4e00-\u9fa5]/.test(cleanLine) && nameLines.length < 2 && !priceSemantic.test(cleanLine) && !/^\d+$/.test(cleanLine)) {
-               nameLines.push(cleanLine.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
+           // --- 品名擷取邏輯 ---
+           // 只考慮包含中文字且長度足夠的行
+           if (/[\u4e00-\u9fa5]/.test(text) && text.length > 2 && !priceSemantic.test(text)) {
+               nameCandidates.push({ text: text.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim(), height: height });
            }
        });
 
-       // 依照權重排序，權重相同則數值小的優先（通常特價數字較小）
-       priceCandidates.sort((a,b) => b.score - a.score || a.val - b.val);
+       // 排序：視覺高度最高優先
+       priceCandidates.sort((a,b) => b.score - a.score);
+       nameCandidates.sort((a,b) => b.height - a.height);
 
-       document.getElementById('itemName').value = nameLines.join(' ');
-       if (priceCandidates.length > 0) document.getElementById('price').value = priceCandidates[0].val;
+       if (nameCandidates.length > 0) {
+           // 從視覺最顯眼的幾行中，選擇長度最像品名的 (排除「特價」等短字)
+           const bestName = nameCandidates.find(n => n.text.length > 3) || nameCandidates[0];
+           document.getElementById('itemName').value = bestName.text;
+       }
+       
+       if (priceCandidates.length > 0) {
+           document.getElementById('price').value = priceCandidates[0].val;
+       }
        
        updateLivePrice();
-       status.innerText = "✅ 辨識完成 (V3.9)";
+       status.innerText = "✅ 辨識完成 (V3.9+)";
     } catch(e){ status.innerText="❌ 辨識失敗"; } finally { if(worker) await worker.terminate(); }
 }
 
+// 其餘 V3.6.1 功能函式保持不變...
 function getLCSLength(s1,s2){
    if(!s1||!s2)return 0;
    let m=s1.length, n=s2.length, max=0;
@@ -259,7 +269,7 @@ function deleteRecord(store,index){ if(confirm("確定刪除紀錄？")){ storeD
 function saveToStorage(){ localStorage.setItem('storeTabsData',JSON.stringify(storeData)); }
 function resetInputs(){
    document.getElementById('itemName').value=''; document.getElementById('price').value=''; document.getElementById('remark').value=''; document.getElementById('count').value='1';
-   document.getElementById('ocr-status').innerText = "支援 V3.9 漏斗式辨識邏輯";
+   document.getElementById('ocr-status').innerText = "支援 V3.9+ 視覺高度優先演算法";
 }
 function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 
