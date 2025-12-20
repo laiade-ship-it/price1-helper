@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 專業優化版</title>
+    <title>精準比價小幫手 - 終極封版</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -14,7 +14,7 @@
         .input-group { margin-bottom:15px; }
         label { display:block; margin-bottom:6px; font-size:14px; font-weight:bold; color:#666; }
         input, select { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; }
-        button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; margin-bottom:10px; }
+        button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; margin-bottom:10px; transition: 0.2s; }
         .btn-save { background:var(--success); color:white; }
         .btn-compare { background:var(--primary); color:white; }
         #comparison-area { margin-top:15px; display:none; }
@@ -22,17 +22,17 @@
         .compare-item { background:white; border-radius:10px; padding:10px; margin-bottom:8px; border-left:4px solid #ddd; position:relative; }
         .compare-item.best-cp { border-left-color:var(--warning); background:#fffdf0; }
         .best-tag { position:absolute; right:10px; top:10px; background:var(--warning); color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; }
-        .total-price-display { color:var(--primary); font-weight:bold; font-size:14px; }
-        .unit-warning { color: #d48806; font-size: 10px; background: #fffbe6; padding: 2px 4px; border-radius: 4px; }
+        .total-price-display { color:var(--primary); font-weight:800; font-size:15px; }
+        .unit-mismatch-badge { font-size: 10px; color: #999; border: 1px solid #ccc; padding: 1px 4px; border-radius: 4px; margin-left: 5px; }
         #store-tabs-container { margin-top:25px; border-top:2px solid #f0f0f0; padding-top:20px; }
-        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; }
+        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none; }
         .tab-btn { background:#eee; padding:10px 16px; border-radius:20px; white-space:nowrap; font-size:13px; font-weight:bold; flex-shrink:0; cursor:pointer; }
         .tab-btn.active { background:var(--primary); color:white; }
         .record-item { background:#fff; padding:14px; border-radius:14px; margin-bottom:10px; border:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
         .record-price { text-align:right; font-weight:800; color:var(--primary); font-size:18px; }
-        .action-link { font-size:12px; color:var(--primary); margin-left:10px; cursor:pointer; }
+        .action-link { font-size:12px; color:var(--primary); margin-left:10px; cursor:pointer; text-decoration: none; }
         .action-link.delete { color:var(--danger); }
-        .remark-text { font-size: 11px; color: #888; margin-top: 2px; }
+        .remark-text { font-size: 11px; color: #888; margin-top: 3px; font-style: italic; }
     </style>
 </head>
 <body>
@@ -43,7 +43,7 @@
         <span style="font-size:35px;">📸</span>
         <p style="margin:5px 0; font-weight:bold;">拍攝價格牌</p>
         <input type="file" id="ocr-upload" accept="image/*" style="display:none">
-        <span id="ocr-status" class="ocr-status">支援高精度價格過濾辨識</span>
+        <span id="ocr-status" class="ocr-status">支援雙行品名與總價辨識</span>
     </div>
 
     <div class="input-group">
@@ -56,7 +56,7 @@
     </div>
     
     <div style="display:flex; gap:10px;">
-        <div class="input-group" style="flex:1;">
+        <div class="input-group" style="flex:1.5;">
             <label>💵 總價 (元)</label>
             <input type="number" id="price" inputmode="decimal" placeholder="0">
         </div>
@@ -74,8 +74,8 @@
     </div>
 
     <div class="input-group">
-        <label>📝 備註</label>
-        <input type="text" id="remark" placeholder="額外資訊（如：買一送一）">
+        <label>📝 備註欄</label>
+        <input type="text" id="remark" placeholder="買一送一、限時特價等">
     </div>
 
     <button class="btn-save" id="btnSave">✅ 儲存此紀錄</button>
@@ -84,7 +84,7 @@
     <div id="comparison-area">
         <div class="compare-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 style="margin:0; color:#0056b3;">📊 比價分析結果</h4>
+                <h4 style="margin:0; color:#0056b3;">📊 比價分析結果 (LCS ≥ 2)</h4>
                 <span id="closeCompare" style="font-size:20px; cursor:pointer;">×</span>
             </div>
             <div id="compareList"></div>
@@ -95,14 +95,14 @@
         <div id="tab-headers" class="tab-headers"></div>
         <div id="tab-contents"></div>
     </div>
-    <button class="btn-clear" id="btnClearAll" style="background:none; color:#999; font-size:12px; margin-top:20px; text-decoration:underline; border:none; width:auto; display:block; margin-left:auto; margin-right:auto;">清空所有資料</button>
+    <button class="btn-clear" id="btnClearAll" style="background:none; color:#999; font-size:12px; margin-top:20px; text-decoration:underline; border:none; width:auto; display:block; margin: 20px auto 0 auto;">清空所有資料</button>
 </div>
 
 <script>
 let storeData = {};
 let currentActiveStore = null;
 
-/** 1. 優化 OCR 價格過濾邏輯 (防誤抓數量) */
+/** 1. 還原原始 OCR 辨識邏輯並加入價格過濾 */
 async function performOCR(input) {
     if (!input.files[0]) return;
     const status = document.getElementById('ocr-status');
@@ -117,20 +117,24 @@ async function performOCR(input) {
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格)[:：\s]*([\d,]{2,7})/i;
 
         lines.forEach(line => {
+            // 價格辨識
             const sMatch = line.match(priceSemantic);
             if (sMatch) {
                 priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
             }
-            // 排除過小的數字（可能是數量）
             const pMatches = line.match(/\b\d{2,5}\b/g);
             if (pMatches) {
                 pMatches.forEach(m => {
-                    const val = parseInt(m);
-                    if (val > 15) priceCandidates.push({ val, score: 50 });
+                    const v = parseInt(m);
+                    if (v > 15) priceCandidates.push({ val: v, score: 50 }); // 過濾掉 12入、8瓶等數量
                 });
             }
 
-            if (/[\u4e00-\u9fa5]/.test(line) && nameLines.length < 2 && !priceSemantic.test(line)) {
+            // [還原核心防線] 品名辨識：必須有中文、排除純數字行、排除價格行
+            if (/[\u4e00-\u9fa5]/.test(line) && 
+                nameLines.length < 2 && 
+                !priceSemantic.test(line) && 
+                !/^\d+$/.test(line)) {
                 nameLines.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
             }
         });
@@ -147,7 +151,7 @@ async function performOCR(input) {
     }
 }
 
-/** 2. 嚴格 LCS 比價 */
+/** 2. 核心 LCS 算法 (維持原樣) */
 function getLCSLength(s1, s2) {
     if (!s1 || !s2) return 0;
     let m = s1.length, n = s2.length, max = 0;
@@ -163,6 +167,7 @@ function getLCSLength(s1, s2) {
     return max;
 }
 
+/** 3. 修改比價邏輯：防止異單位誤比 */
 function comparePrices() {
     const query = document.getElementById('itemName').value.trim();
     const currentUnit = document.getElementById('unit').value.trim();
@@ -178,23 +183,28 @@ function comparePrices() {
         });
     });
 
-    if (matches.length === 0) return alert("找不到相似紀錄");
+    if (matches.length === 0) return alert("找不到相似紀錄 (LCS < 2)");
 
     matches.sort((a, b) => b.matchScore - a.matchScore || a.unitPrice - b.unitPrice);
-    const minUnitPrice = Math.min(...matches.map(m => m.unitPrice));
+    
+    // [邏輯隔離] 只有跟目前單位一致的，才能參與「歷史最推」排名
+    const sameUnitMatches = matches.filter(m => (m.unit || '入') === currentUnit);
+    const minUnitPrice = sameUnitMatches.length > 0 ? Math.min(...sameUnitMatches.map(m => m.unitPrice)) : null;
 
     const listContainer = document.getElementById('compareList');
     listContainer.innerHTML = matches.map(m => {
-        const isBest = Math.abs(m.unitPrice - minUnitPrice) < 0.01;
-        const unitMismatch = currentUnit && m.unit && currentUnit !== m.unit; // 3. 單位不一致提醒
+        const itemUnit = m.unit || '入';
+        const isSameUnit = itemUnit === currentUnit;
+        const isBest = isSameUnit && minUnitPrice && Math.abs(m.unitPrice - minUnitPrice) < 0.01;
+        
         return `
             <div class="compare-item ${isBest ? 'best-cp' : ''}">
-                ${isBest ? '<span class="best-tag">🏆 歷史最推</span>' : ''}
-                <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)} ${unitMismatch ? '<span class="unit-warning">⚠️單位不同</span>' : ''}</div>
+                ${isBest ? '<span class="best-tag">🏆 同單位 CP 最高</span>' : ''}
+                <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)} ${!isSameUnit ? `<span class="unit-mismatch-badge">不同單位: ${escapeHtml(itemUnit)}</span>` : ''}</div>
                 <div style="font-size:11px; color:#666;">📍 ${escapeHtml(m.store)} | 📅 ${m.date}</div>
-                ${m.remark ? `<div class="remark-text">💡 備註: ${escapeHtml(m.remark)}</div>` : ''}
+                ${m.remark ? `<div class="remark-text">備註: ${escapeHtml(m.remark)}</div>` : ''}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:5px;">
-                    <small>數量: ${m.count}${escapeHtml(m.unit || '入')}</small>
+                    <small>${m.count} ${escapeHtml(itemUnit)} (單價: $${m.unitPrice.toFixed(2)})</small>
                     <span class="total-price-display">總價: $${m.price}</span>
                 </div>
             </div>
@@ -202,15 +212,15 @@ function comparePrices() {
     }).join('');
 
     document.getElementById('comparison-area').style.display = 'block';
+    document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
 }
 
-/** 4. 資料儲存與版本補完 (Schema Migration) */
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類商店";
     const name = document.getElementById('itemName').value.trim();
     const price = parseFloat(document.getElementById('price').value);
     const count = parseInt(document.getElementById('count').value) || 1;
-    const unit = document.getElementById('unit').value.trim();
+    const unit = document.getElementById('unit').value.trim() || "入";
     const remark = document.getElementById('remark').value.trim();
     
     if (!name || isNaN(price)) return alert("請輸入完整資料");
@@ -222,9 +232,8 @@ function saveRecord() {
     resetInputs();
 }
 
-/** 5. 修復刪除跳轉邏輯 */
 function deleteRecord(store, index) {
-    if (confirm("確定刪除？")) {
+    if (confirm("確定刪除這筆紀錄？")) {
         storeData[store].splice(index, 1);
         if (storeData[store].length === 0) {
             delete storeData[store];
@@ -238,20 +247,25 @@ function deleteRecord(store, index) {
 }
 
 function saveToStorage() { localStorage.setItem('storeTabsData', JSON.stringify(storeData)); }
-function resetInputs() { document.getElementById('itemName').value = ''; document.getElementById('price').value = ''; document.getElementById('remark').value = ''; }
+function resetInputs() { 
+    document.getElementById('itemName').value = ''; 
+    document.getElementById('price').value = ''; 
+    document.getElementById('remark').value = '';
+    document.getElementById('comparison-area').style.display = 'none'; 
+}
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-/** 6. 事件綁定優化 (addEventListener) */
+/** 4. 事件綁定優化：解決手機 onclick 吃字問題 */
 function renderTabs(activeStore = null) {
     currentActiveStore = activeStore;
     const headers = document.getElementById('tab-headers');
     const contents = document.getElementById('tab-contents');
     const storeNames = Object.keys(storeData);
     
-    if (storeNames.length === 0) { 
-        headers.innerHTML = ''; 
-        contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>'; 
-        return; 
+    if (storeNames.length === 0) {
+        headers.innerHTML = '';
+        contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>';
+        return;
     }
     
     if (!currentActiveStore || !storeData[currentActiveStore]) {
@@ -263,7 +277,7 @@ function renderTabs(activeStore = null) {
         const btn = document.createElement('div');
         btn.className = `tab-btn ${n === currentActiveStore ? 'active' : ''}`;
         btn.innerText = n;
-        btn.addEventListener('click', () => renderTabs(n)); // 移除內聯事件
+        btn.addEventListener('click', () => renderTabs(n));
         headers.appendChild(btn);
     });
     
@@ -274,7 +288,7 @@ function renderTabs(activeStore = null) {
             <div class="record-item">
                 <div>
                     <b>${escapeHtml(r.name)} (${escapeHtml(r.unit || '入')})</b><br>
-                    <small>${r.date} · ${r.count}${escapeHtml(r.unit || '入')}</small>
+                    <small>${r.date} · ${r.count} ${escapeHtml(r.unit || '入')}</small>
                     ${r.remark ? `<div class="remark-text">備註: ${escapeHtml(r.remark)}</div>` : ''}
                     <br><a class="action-link delete" data-store="${currentActiveStore}" data-idx="${originalIndex}">刪除</a>
                 </div>
@@ -283,7 +297,6 @@ function renderTabs(activeStore = null) {
         `;
     }).join('');
 
-    // 刪除按鈕綁定
     document.querySelectorAll('.action-link.delete').forEach(link => {
         link.addEventListener('click', (e) => {
             deleteRecord(e.target.dataset.store, parseInt(e.target.dataset.idx));
@@ -292,11 +305,14 @@ function renderTabs(activeStore = null) {
 }
 
 window.onload = () => {
-    // 讀取並修復舊資料 (Migration)
+    // [Schema Migration] 安全補完新欄位，不覆蓋舊值
     const rawData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
     Object.keys(rawData).forEach(s => {
         rawData[s] = rawData[s].map(item => ({
-            count: 1, unit: '入', remark: '', ...item // 確保新欄位存在
+            count: item.count || 1,
+            unit: item.unit || '入',
+            remark: item.remark || '',
+            ...item
         }));
     });
     storeData = rawData;
