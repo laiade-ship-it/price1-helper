@@ -16,8 +16,8 @@
         
         .input-group { margin-bottom:15px; }
         label { display:block; margin-bottom:6px; font-size:14px; font-weight:bold; color:#666; }
-        input { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; transition: 0.3s; }
-        input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(74,144,226,0.1); }
+        input, select { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; transition: 0.3s; }
+        input:focus, select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(74,144,226,0.1); }
         
         button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; transition:0.2s; margin-bottom:10px; }
         .btn-save { background:var(--success); color:white; }
@@ -30,7 +30,8 @@
         .compare-item { background:white; border-radius:10px; padding:10px; margin-bottom:8px; border-left:4px solid #ddd; position:relative; }
         .compare-item.best-cp { border-left-color:var(--warning); background:#fffdf0; box-shadow: 0 4px 12px rgba(241,196,15,0.15); }
         .best-tag { position:absolute; right:10px; top:10px; background:var(--warning); color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; }
-        .unit-price { color:var(--danger); font-weight:bold; font-size:14px; }
+        /* 配合需求：原本顯示單價處改為總價相關樣式 */
+        .total-price-display { color:var(--primary); font-weight:bold; font-size:14px; }
 
         /* 分頁系統 */
         #store-tabs-container { margin-top:25px; border-top:2px solid #f0f0f0; padding-top:20px; }
@@ -43,6 +44,7 @@
         .record-price { text-align:right; font-weight:800; color:var(--primary); font-size:18px; }
         .action-link { font-size:12px; color:var(--primary); margin-left:10px; cursor:pointer; text-decoration:none; }
         .action-link.delete { color:var(--danger); }
+        .remark-text { font-size: 11px; color: #888; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -64,8 +66,9 @@
         <label>📦 商品名稱</label>
         <input type="text" id="itemName" placeholder="辨識結果將出現在此">
     </div>
+    
     <div style="display:flex; gap:10px;">
-        <div class="input-group" style="flex:2;">
+        <div class="input-group" style="flex:1;">
             <label>💵 價格 (元)</label>
             <input type="number" id="price" inputmode="decimal" placeholder="0">
         </div>
@@ -73,6 +76,28 @@
             <label>🔢 數量</label>
             <input type="number" id="count" value="1" inputmode="numeric">
         </div>
+        <div class="input-group" style="flex:1;">
+            <label>📏 單位</label>
+            <input list="unit-options" id="unit" placeholder="單位" value="入">
+            <datalist id="unit-options">
+                <option value="C.C.">
+                <option value="入">
+                <option value="個">
+                <option value="瓶">
+                <option value="袋">
+                <option value="包">
+                <option value="毫升">
+                <option value="公升">
+                <option value="顆">
+                <option value="粒">
+                <option value="盒">
+            </datalist>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label>📝 備註</label>
+        <input type="text" id="remark" placeholder="額外資訊（如：買一送一、限時折扣）">
     </div>
 
     <button class="btn-save" id="btnSave">✅ 儲存此紀錄</button>
@@ -98,8 +123,7 @@
 <script>
 let storeData = {};
 
-/** * [整合強化] OCR 權重辨識邏輯 
- */
+/** * [保留] OCR 權重辨識邏輯 */
 async function performOCR(input) {
     if (!input.files[0]) return;
     const status = document.getElementById('ocr-status');
@@ -114,7 +138,6 @@ async function performOCR(input) {
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格)[:：\s]*([\d,]{2,7})/i;
 
         lines.forEach(line => {
-            // 1. 價格候選提取
             const sMatch = line.match(priceSemantic);
             if (sMatch) {
                 priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
@@ -122,15 +145,12 @@ async function performOCR(input) {
             const pMatches = line.match(/\b\d{2,5}\b/g);
             if (pMatches) pMatches.forEach(m => priceCandidates.push({ val: parseInt(m), score: 50 }));
 
-            // 2. 品名雙行提取
             if (/[\u4e00-\u9fa5]/.test(line) && nameLines.length < 2 && !priceSemantic.test(line) && !/^\d+$/.test(line)) {
                 nameLines.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
             }
         });
 
-        // 排序候選價格 (修正 b.score-a.score)
         priceCandidates.sort((a, b) => b.score - a.score || a.val - b.val);
-
         document.getElementById('itemName').value = nameLines.join(' ');
         if (priceCandidates.length > 0) document.getElementById('price').value = priceCandidates[0].val;
 
@@ -143,7 +163,7 @@ async function performOCR(input) {
     }
 }
 
-/** [核心] 嚴格 LCS 比價邏輯 */
+/** [保留] 嚴格 LCS 比價邏輯 */
 function getLCSLength(s1, s2) {
     if (!s1 || !s2) return 0;
     let m = s1.length, n = s2.length, max = 0;
@@ -167,6 +187,7 @@ function comparePrices() {
         storeData[store].forEach((item, index) => {
             const lcs = getLCSLength(query, item.name);
             if (lcs >= 2) {
+                // 內部計算仍使用單價進行排序比價
                 matches.push({ ...item, store, index, matchScore: lcs, unitPrice: item.price / item.count });
             }
         });
@@ -187,11 +208,12 @@ function comparePrices() {
         return `
             <div class="compare-item ${isBest ? 'best-cp' : ''}">
                 ${isBest ? '<span class="best-tag">🏆 歷史最推 (CP最高)</span>' : ''}
-                <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)}</div>
+                <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)} ${escapeHtml(m.unit || '')}</div>
                 <div style="font-size:11px; color:#666;">📍 ${escapeHtml(m.store)} | 📅 ${m.date} | 匹配:${m.matchScore}字</div>
+                ${m.remark ? `<div class="remark-text">💡 備註: ${escapeHtml(m.remark)}</div>` : ''}
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:5px;">
-                    <small>$${m.price} / ${m.count}入</small>
-                    <span class="unit-price">單價: $${m.unitPrice.toFixed(2)}</span>
+                    <small>數量: ${m.count} ${escapeHtml(m.unit || '')}</small>
+                    <span class="total-price-display">總價: $${m.price}</span>
                 </div>
             </div>
         `;
@@ -201,16 +223,20 @@ function comparePrices() {
     document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
 }
 
-/* --- 完整 CRUD 紀錄管理系統 --- */
+/* --- CRUD 紀錄管理系統 --- */
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類商店";
     const name = document.getElementById('itemName').value.trim();
     const price = parseFloat(document.getElementById('price').value);
     const count = parseInt(document.getElementById('count').value) || 1;
+    const unit = document.getElementById('unit').value.trim();
+    const remark = document.getElementById('remark').value.trim();
+    
     if (!name || isNaN(price)) return alert("請輸入完整資料");
     
     if (!storeData[store]) storeData[store] = [];
-    storeData[store].push({ name, price, count, date: new Date().toLocaleDateString() });
+    // 儲存時包含單位與備註
+    storeData[store].push({ name, price, count, unit, remark, date: new Date().toLocaleDateString() });
     saveToStorage();
     renderTabs(store);
     resetInputs();
@@ -226,7 +252,12 @@ function deleteRecord(store, index) {
 }
 
 function saveToStorage() { localStorage.setItem('storeTabsData', JSON.stringify(storeData)); }
-function resetInputs() { document.getElementById('itemName').value = ''; document.getElementById('price').value = ''; document.getElementById('comparison-area').style.display = 'none'; }
+function resetInputs() { 
+    document.getElementById('itemName').value = ''; 
+    document.getElementById('price').value = ''; 
+    document.getElementById('remark').value = ''; 
+    document.getElementById('comparison-area').style.display = 'none'; 
+}
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
 function renderTabs(activeStore = null) {
@@ -244,8 +275,9 @@ function renderTabs(activeStore = null) {
         return `
             <div class="record-item">
                 <div>
-                    <b>${escapeHtml(r.name)}</b><br>
-                    <small>${r.date} · ${r.count}入</small>
+                    <b>${escapeHtml(r.name)} (${escapeHtml(r.unit || '入')})</b><br>
+                    <small>${r.date} · ${r.count}${escapeHtml(r.unit || '入')}</small>
+                    ${r.remark ? `<div class="remark-text">備註: ${escapeHtml(r.remark)}</div>` : ''}
                     <br><a class="action-link delete" onclick="deleteRecord('${activeStore}', ${originalIndex})">刪除</a>
                 </div>
                 <div class="record-price">$${r.price}</div>
