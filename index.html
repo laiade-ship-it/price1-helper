@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 基準版 V3.5 🔒</title>
+    <title>精準比價小幫手 - V3.5 終極版 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -23,19 +23,21 @@
         .compare-item.best-cp { border-left-color:var(--warning); background:#fffdf0; }
         .best-tag { position:absolute; right:10px; top:10px; background:var(--warning); color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; }
         #store-tabs-container { margin-top:25px; border-top:2px solid #f0f0f0; padding-top:20px; }
+        .tab-controls { display:flex; gap:8px; margin-bottom:10px; justify-content: flex-end; }
         .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none; }
         .tab-btn { background:#eee; padding:10px 16px; border-radius:20px; white-space:nowrap; font-size:13px; font-weight:bold; flex-shrink:0; cursor:pointer; }
         .tab-btn.active { background:var(--primary); color:white; }
         .record-item { background:#fff; padding:14px; border-radius:14px; margin-bottom:10px; border:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
         .record-price { text-align:right; font-weight:800; color:var(--primary); font-size:18px; }
-        .action-link { font-size:12px; color:var(--primary); margin-left:10px; cursor:pointer; text-decoration: none; }
+        .action-link { font-size:12px; color:var(--primary); margin-right:12px; cursor:pointer; text-decoration: none; font-weight: bold; }
         .action-link.delete { color:var(--danger); }
         .remark-text { font-size: 11px; color: #888; margin-top: 3px; font-style: italic; }
+        .ctrl-mini-btn { font-size:11px; padding:5px 10px; border-radius:8px; background:#f0f0f0; border:1px solid #ddd; cursor:pointer; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (基準版 V3.5 🔒)</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.5 終極版 🔒)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
@@ -87,6 +89,7 @@
     </div>
 
     <div id="store-tabs-container">
+        <div id="tab-controls" class="tab-controls"></div>
         <div id="tab-headers" class="tab-headers"></div>
         <div id="tab-contents"></div>
     </div>
@@ -94,10 +97,11 @@
 </div>
 
 <script>
-/* 🔒 核心鎖定區：OCR, LCS, Compare (V3.5) */
+/* 🔒 核心鎖定區：OCR, LCS, Compare */
 let storeData = {};
 let currentActiveStore = null;
 let unitList = [];
+let editingIndex = null; // 用於判斷當前是否正在編輯商品
 const DEFAULT_UNITS = ["入","顆","個","克","毫升","c.c.","包","袋","瓶","公升"];
 
 async function performOCR(input) {
@@ -170,8 +174,10 @@ function comparePrices(){
         </div>`;
     }).join('');
     document.getElementById('comparison-area').style.display='block';
+    document.getElementById('comparison-area').scrollIntoView({behavior:'smooth'});
 }
 
+/* 📏 V3.5 混合單位與管理系統 */
 function refreshUnitSelect(targetValue = null) {
     const sel = document.getElementById('unitSelect');
     let usedUnits = [];
@@ -198,6 +204,42 @@ function handleUnitChange(sel) {
     }
 }
 
+/* 📝 商品與商店編輯邏輯 */
+function renameStore(oldName) {
+    const newName = prompt("請輸入「" + oldName + "」的新名稱：", oldName);
+    if (newName && newName.trim() && newName !== oldName) {
+        if (storeData[newName]) return alert("此店名已存在！");
+        storeData[newName.trim()] = storeData[oldName];
+        delete storeData[oldName];
+        saveToStorage();
+        renderTabs(newName.trim());
+    }
+}
+
+function deleteStore(storeName) {
+    if (confirm("確定刪除商店「" + storeName + "」及其所有內容？")) {
+        delete storeData[storeName];
+        saveToStorage();
+        renderTabs();
+    }
+}
+
+function editItem(store, index) {
+    const item = storeData[store][index];
+    document.getElementById('storeName').value = store;
+    document.getElementById('itemName').value = item.name;
+    document.getElementById('price').value = item.price;
+    document.getElementById('count').value = item.count;
+    document.getElementById('remark').value = item.remark || '';
+    refreshUnitSelect(item.unit);
+    
+    editingIndex = { store, index };
+    const btn = document.getElementById('btnSave');
+    btn.innerText = "🆙 更新紀錄 (取代原項目)";
+    btn.style.background = "var(--primary)";
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function saveRecord(){
     const store=document.getElementById('storeName').value.trim()||"未分類商店";
     const name=document.getElementById('itemName').value.trim();
@@ -205,7 +247,18 @@ function saveRecord(){
     const count=parseInt(document.getElementById('count').value)||1;
     const unit=document.getElementById('unitSelect').value;
     const remark=document.getElementById('remark').value.trim();
+    
     if(!name||isNaN(price)) return alert("請輸入完整資料");
+
+    // 如果是編輯模式，先刪除舊的
+    if (editingIndex) {
+        storeData[editingIndex.store].splice(editingIndex.index, 1);
+        if (storeData[editingIndex.store].length === 0) delete storeData[editingIndex.store];
+        editingIndex = null;
+        document.getElementById('btnSave').innerText = "✅ 儲存此紀錄";
+        document.getElementById('btnSave').style.background = "var(--success)";
+    }
+
     if(!storeData[store]) storeData[store]=[];
     storeData[store].push({name,price,count,unit,remark,date:new Date().toLocaleDateString()});
     saveToStorage();
@@ -215,43 +268,61 @@ function saveRecord(){
 }
 
 function renderTabs(activeStore=null){
-    currentActiveStore=activeStore;
-    const headers=document.getElementById('tab-headers');
-    const contents=document.getElementById('tab-contents');
-    const storeNames=Object.keys(storeData);
-    if(storeNames.length===0){ headers.innerHTML=''; contents.innerHTML='<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>'; return; }
-    if(!currentActiveStore||!storeData[currentActiveStore]) currentActiveStore=storeNames[storeNames.length-1];
-    headers.innerHTML='';
-    storeNames.forEach(n=>{
-        const btn=document.createElement('div');
-        btn.className=`tab-btn ${n===currentActiveStore?'active':''}`;
-        btn.innerText=n;
-        btn.addEventListener('click',()=>renderTabs(n));
+    currentActiveStore = activeStore;
+    const controls = document.getElementById('tab-controls');
+    const headers = document.getElementById('tab-headers');
+    const contents = document.getElementById('tab-contents');
+    const storeNames = Object.keys(storeData);
+
+    if(storeNames.length === 0){
+        controls.innerHTML = ''; headers.innerHTML = '';
+        contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>';
+        return;
+    }
+
+    if(!currentActiveStore || !storeData[currentActiveStore]) currentActiveStore = storeNames[storeNames.length-1];
+
+    // 商店管理按鈕
+    controls.innerHTML = `
+        <span class="ctrl-mini-btn" onclick="renameStore('${currentActiveStore}')">📝 改店名</span>
+        <span class="ctrl-mini-btn" style="color:var(--danger)" onclick="deleteStore('${currentActiveStore}')">🗑️ 刪除店</span>
+    `;
+
+    // 分頁標籤
+    headers.innerHTML = '';
+    storeNames.forEach(n => {
+        const btn = document.createElement('div');
+        btn.className = `tab-btn ${n === currentActiveStore ? 'active' : ''}`;
+        btn.innerText = n;
+        btn.onclick = () => renderTabs(n);
         headers.appendChild(btn);
     });
-    const records=storeData[currentActiveStore]||[];
-    contents.innerHTML=records.slice().reverse().map((r,i)=>{
-        const originalIndex=records.length-1-i;
+
+    // 商品清單
+    const records = storeData[currentActiveStore] || [];
+    contents.innerHTML = records.slice().reverse().map((r, i) => {
+        const originalIndex = records.length - 1 - i;
         return `<div class="record-item">
-            <div>
+            <div style="flex:1">
                 <b>${escapeHtml(r.name)} (${escapeHtml(r.unit)})</b><br>
                 <small>${r.date} · ${r.count} ${escapeHtml(r.unit)}</small>
                 ${r.remark ? `<div class="remark-text">備註: ${escapeHtml(r.remark)}</div>` : ''}
-                <br><a class="action-link delete" data-store="${currentActiveStore}" data-idx="${originalIndex}">刪除</a>
+                <div style="margin-top:8px;">
+                    <span class="action-link" onclick="editItem('${currentActiveStore}', ${originalIndex})">✏️ 編輯</span>
+                    <span class="action-link delete" onclick="deleteRecord('${currentActiveStore}', ${originalIndex})">🗑️ 刪除</span>
+                </div>
             </div>
             <div class="record-price">$${r.price}</div>
         </div>`;
     }).join('');
-    document.querySelectorAll('.action-link.delete').forEach(link=>{ link.addEventListener('click',e=>{ deleteRecord(e.target.dataset.store,parseInt(e.target.dataset.idx)); }); });
 }
 
 function deleteRecord(store,index){
     if(confirm("確定刪除這筆紀錄？")){
         storeData[store].splice(index,1);
-        if(storeData[store].length===0){ delete storeData[store]; currentActiveStore=Object.keys(storeData)[0]||null; }
-        else currentActiveStore=store;
+        if(storeData[store].length===0) delete storeData[store];
         saveToStorage();
-        renderTabs(currentActiveStore);
+        renderTabs(storeData[store] ? store : null);
     }
 }
 
@@ -262,6 +333,7 @@ function resetInputs(){
     document.getElementById('remark').value='';
     document.getElementById('count').value='1';
     document.getElementById('comparison-area').style.display='none';
+    editingIndex = null;
 }
 function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 
