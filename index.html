@@ -113,21 +113,26 @@ async function performOCR(input) {
    const file = input.files[0];
    if (!file) return;
    
-   const apiKey = localStorage.getItem('gemini_api_key');
-   if (!apiKey || apiKey.trim() === "") {
-       alert("AIzaSyCZcjvhjH5XX73hhd24w1GoVrELoXPKpVs");
+   let apiKey = localStorage.getItem('gemini_api_key');
+   if (!apiKey) {
+       alert("❌ 偵測不到 API Key！\n請滑到頁面最下方填入正確的 Key 並儲存。");
        return;
+   }
+   
+   // 自動修正：將開頭可能誤打的 Al 修正為 AI
+   if (apiKey.startsWith("Alza")) {
+       apiKey = "AI" + apiKey.substring(2);
+       console.log("AIzaSyCZcjvhjH5XX73hhd24w1GoVrELoXPKpVs");
    }
 
    const status = document.getElementById('ocr-status');
-   status.innerText = "🧠 Gemini AI 正在思考中...";
+   status.innerText = "🧠 Gemini AI 正在連線分析...";
 
    try {
        const base64Data = await toBase64(file);
        const base64Image = base64Data.split(',')[1];
 
-       // 增加一個更嚴格的指令，確保 AI 只回傳乾淨的 JSON
-       const promptText = "分析價格牌。回傳 JSON: { 'item': '品名', 'price': 數字 }。只回傳 JSON，不要 markdown 代碼塊。";
+       const promptText = "你是價格標籤分析專家。請讀取圖片並只回傳 JSON：{ 'item': '品名', 'price': 數字 }。不要回傳 markdown 程式碼區塊。";
 
        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`, {
            method: 'POST',
@@ -143,35 +148,28 @@ async function performOCR(input) {
        });
 
        if (!response.ok) {
-           const errorData = await response.json();
-           throw new Error(`API 錯誤: ${errorData.error.message}`);
+           const err = await response.json();
+           throw new Error(err.error.message || "網路連線被攔截");
        }
 
        const result = await response.json();
+       let aiText = result.candidates[0].content.parts[0].text;
        
-       if (!result.candidates || result.candidates.length === 0) {
-           throw new Error("AI 沒有回傳任何內容，請換張照片試試。");
-       }
+       // 關鍵修正：有些 AI 會回傳 ```json { ... } ```，這段代碼會自動把雜質清掉
+       const cleanJson = aiText.replace(/```json|```/g, "").trim();
+       const data = JSON.parse(cleanJson);
 
-       let aiResponseText = result.candidates[0].content.parts[0].text;
+       document.getElementById('itemName').value = data.item || "未辨識";
+       document.getElementById('price').value = data.price || 0;
        
-       // 強化後的 JSON 提取邏輯
-       const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-       if (jsonMatch) {
-           const data = JSON.parse(jsonMatch[0].replace(/'/g, '"'));
-           document.getElementById('itemName').value = data.item || "未辨識品名";
-           document.getElementById('price').value = data.price || 0;
-           status.innerText = "✅ AI 視覺辨識成功";
-           updateLivePrice();
-       } else {
-           throw new Error("AI 回傳格式不正確，無法解析 JSON。");
-       }
-    } catch(e){ 
-        console.error(e);
-        // 直接將錯誤原因彈出來
-        alert("🚨 發生錯誤：\n" + e.message);
-        status.innerText = "❌ 辨識失敗"; 
-    }
+       status.innerText = "✅ AI 視覺辨識成功";
+       updateLivePrice();
+   } catch (e) {
+       console.error("OCR Error:", e);
+       // 彈出具體原因
+       alert("🚨 辨識失敗，原因：\n" + e.message + "\n\n建議：檢查 API Key 是否正確，或暫時關閉 AdBlock 廣告攔截器。");
+       status.innerText = "❌ 辨識失敗";
+   }
 }
 
 // --- 以下維持 V3.6.1 穩定版邏輯 ---
@@ -311,4 +309,5 @@ window.onload=()=>{
 </script>
 </body>
 </html>
+
 
