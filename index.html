@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - 終極封版</title>
+    <title>精準比價小幫手 - 終極穩定版 V3.3</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -66,9 +66,10 @@
         </div>
         <div class="input-group" style="flex:1;">
             <label>📏 單位</label>
-            <input list="unit-options" id="unit" placeholder="單位" value="入">
-            <datalist id="unit-options">
-                </datalist>
+            <input list="unit-options" id="unit" placeholder="單位" value="入" 
+                   onclick="this.select();" 
+                   autocomplete="off">
+            <datalist id="unit-options"></datalist>
         </div>
     </div>
 
@@ -100,7 +101,6 @@
 <script>
 let storeData = {};
 let currentActiveStore = null;
-// 修改點：新增單位管理列表
 let unitList = [];
 const DEFAULT_UNITS = ["顆", "個", "克", "毫升", "c.c.", "包", "袋", "瓶", "入", "公升"];
 
@@ -114,41 +114,22 @@ async function performOCR(input) {
         worker = await Tesseract.createWorker('chi_tra+eng');
         const { data } = await worker.recognize(input.files[0]);
         const lines = (data.lines || []).map(l => l.text.trim()).filter(Boolean);
-        
         let nameLines = [], priceCandidates = [];
         const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格)[:：\s]*([\d,]{2,7})/i;
-
         lines.forEach(line => {
             const sMatch = line.match(priceSemantic);
-            if (sMatch) {
-                priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
-            }
+            if (sMatch) priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
             const pMatches = line.match(/\b\d{2,5}\b/g);
-            if (pMatches) {
-                pMatches.forEach(m => {
-                    const v = parseInt(m);
-                    if (v > 15) priceCandidates.push({ val: v, score: 50 });
-                });
-            }
-
-            if (/[\u4e00-\u9fa5]/.test(line) && 
-                nameLines.length < 2 && 
-                !priceSemantic.test(line) && 
-                !/^\d+$/.test(line)) {
+            if (pMatches) pMatches.forEach(m => { const v = parseInt(m); if (v > 15) priceCandidates.push({ val: v, score: 50 }); });
+            if (/[\u4e00-\u9fa5]/.test(line) && nameLines.length < 2 && !priceSemantic.test(line) && !/^\d+$/.test(line)) {
                 nameLines.push(line.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
             }
         });
-
         priceCandidates.sort((a, b) => b.score - a.score || a.val - b.val);
         document.getElementById('itemName').value = nameLines.join(' ');
         if (priceCandidates.length > 0) document.getElementById('price').value = priceCandidates[0].val;
-
         status.innerText = "✅ 辨識完成";
-    } catch (e) {
-        status.innerText = "❌ 辨識失敗";
-    } finally {
-        if (worker) await worker.terminate();
-    }
+    } catch (e) { status.innerText = "❌ 辨識失敗"; } finally { if (worker) await worker.terminate(); }
 }
 
 /** 2. 核心 LCS 算法 (維持原樣) */
@@ -158,10 +139,7 @@ function getLCSLength(s1, s2) {
     let table = Array(m+1).fill(0).map(()=>Array(n+1).fill(0));
     for (let i = 1; i <= m; i++) {
         for (let j = 1; j <= n; j++) {
-            if (s1[i - 1] === s2[j - 1]) {
-                table[i][j] = table[i - 1][j - 1] + 1;
-                max = Math.max(max, table[i][j]);
-            }
+            if (s1[i - 1] === s2[j - 1]) { table[i][j] = table[i - 1][j - 1] + 1; max = Math.max(max, table[i][j]); }
         }
     }
     return max;
@@ -172,30 +150,22 @@ function comparePrices() {
     const query = document.getElementById('itemName').value.trim();
     const currentUnit = document.getElementById('unit').value.trim();
     if (query.length < 1) return alert("請先輸入品名");
-    
     let matches = [];
     Object.keys(storeData).forEach(store => {
         storeData[store].forEach((item, index) => {
             const lcs = getLCSLength(query, item.name);
-            if (lcs >= 2) {
-                matches.push({ ...item, store, index, matchScore: lcs, unitPrice: item.price / (item.count || 1) });
-            }
+            if (lcs >= 2) matches.push({ ...item, store, index, matchScore: lcs, unitPrice: item.price / (item.count || 1) });
         });
     });
-
     if (matches.length === 0) return alert("找不到相似紀錄 (LCS < 2)");
-
     matches.sort((a, b) => b.matchScore - a.matchScore || a.unitPrice - b.unitPrice);
-    
     const sameUnitMatches = matches.filter(m => (m.unit || '入') === currentUnit);
     const minUnitPrice = sameUnitMatches.length > 0 ? Math.min(...sameUnitMatches.map(m => m.unitPrice)) : null;
-
     const listContainer = document.getElementById('compareList');
     listContainer.innerHTML = matches.map(m => {
         const itemUnit = m.unit || '入';
         const isSameUnit = itemUnit === currentUnit;
         const isBest = isSameUnit && minUnitPrice && Math.abs(m.unitPrice - minUnitPrice) < 0.01;
-        
         return `
             <div class="compare-item ${isBest ? 'best-cp' : ''}">
                 ${isBest ? '<span class="best-tag">🏆 同單位 CP 最高</span>' : ''}
@@ -209,21 +179,17 @@ function comparePrices() {
             </div>
         `;
     }).join('');
-
     document.getElementById('comparison-area').style.display = 'block';
     document.getElementById('comparison-area').scrollIntoView({ behavior: 'smooth' });
 }
 
-// 修改點：新增單位列表管理功能
+/** 4. 單位 DataList 刷新邏輯 (回歸穩定版) */
 function refreshUnitDatalist() {
     const dl = document.getElementById('unit-options');
-    // 取得所有目前已儲存紀錄中出現過的單位，與預設值/手動值取聯集
     let usedUnits = [];
     Object.values(storeData).forEach(storeItems => {
         storeItems.forEach(item => { if(item.unit) usedUnits.push(item.unit); });
     });
-    
-    // 合併：預設 + localStorage 手動新增 + 實際紀錄中使用的單位
     let combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList, ...usedUnits]));
     dl.innerHTML = combined.map(u => `<option value="${u}">`).join('');
 }
@@ -235,19 +201,15 @@ function saveRecord() {
     const count = parseInt(document.getElementById('count').value) || 1;
     const unit = document.getElementById('unit').value.trim() || "入";
     const remark = document.getElementById('remark').value.trim();
-    
     if (!name || isNaN(price)) return alert("請輸入完整資料");
-    
-    // 修改點：自動偵測並新增單位
     if (!DEFAULT_UNITS.includes(unit) && !unitList.includes(unit)) {
         unitList.push(unit);
         localStorage.setItem('managedUnits', JSON.stringify(unitList));
     }
-
     if (!storeData[store]) storeData[store] = [];
     storeData[store].push({ name, price, count, unit, remark, date: new Date().toLocaleDateString() });
     saveToStorage();
-    refreshUnitDatalist(); // 更新下拉清單
+    refreshUnitDatalist();
     renderTabs(store);
     resetInputs();
 }
@@ -255,14 +217,10 @@ function saveRecord() {
 function deleteRecord(store, index) {
     if (confirm("確定刪除這筆紀錄？")) {
         storeData[store].splice(index, 1);
-        if (storeData[store].length === 0) {
-            delete storeData[store];
-            currentActiveStore = Object.keys(storeData)[0] || null;
-        } else {
-            currentActiveStore = store;
-        }
+        if (storeData[store].length === 0) { delete storeData[store]; currentActiveStore = Object.keys(storeData)[0] || null; }
+        else { currentActiveStore = store; }
         saveToStorage();
-        refreshUnitDatalist(); // 刪除後同步更新下拉選單狀態
+        refreshUnitDatalist();
         renderTabs(currentActiveStore);
     }
 }
@@ -272,27 +230,20 @@ function resetInputs() {
     document.getElementById('itemName').value = ''; 
     document.getElementById('price').value = ''; 
     document.getElementById('remark').value = '';
+    document.getElementById('unit').value = '入';
+    document.getElementById('count').value = '1';
     document.getElementById('comparison-area').style.display = 'none'; 
 }
 function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-/** 4. 事件綁定優化 (維持原樣) */
+/** 5. 事件綁定與分頁渲染 (維持原樣) */
 function renderTabs(activeStore = null) {
     currentActiveStore = activeStore;
     const headers = document.getElementById('tab-headers');
     const contents = document.getElementById('tab-contents');
     const storeNames = Object.keys(storeData);
-    
-    if (storeNames.length === 0) {
-        headers.innerHTML = '';
-        contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>';
-        return;
-    }
-    
-    if (!currentActiveStore || !storeData[currentActiveStore]) {
-        currentActiveStore = storeNames[storeNames.length - 1];
-    }
-
+    if (storeNames.length === 0) { headers.innerHTML = ''; contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>'; return; }
+    if (!currentActiveStore || !storeData[currentActiveStore]) { currentActiveStore = storeNames[storeNames.length - 1]; }
     headers.innerHTML = '';
     storeNames.forEach(n => {
         const btn = document.createElement('div');
@@ -301,7 +252,6 @@ function renderTabs(activeStore = null) {
         btn.addEventListener('click', () => renderTabs(n));
         headers.appendChild(btn);
     });
-    
     const records = storeData[currentActiveStore] || [];
     contents.innerHTML = records.slice().reverse().map((r, i) => {
         const originalIndex = records.length - 1 - i;
@@ -317,37 +267,25 @@ function renderTabs(activeStore = null) {
             </div>
         `;
     }).join('');
-
     document.querySelectorAll('.action-link.delete').forEach(link => {
-        link.addEventListener('click', (e) => {
-            deleteRecord(e.target.dataset.store, parseInt(e.target.dataset.idx));
-        });
+        link.addEventListener('click', (e) => { deleteRecord(e.target.dataset.store, parseInt(e.target.dataset.idx)); });
     });
 }
 
 window.onload = () => {
-    // 讀取單位清單
     unitList = JSON.parse(localStorage.getItem('managedUnits')) || [];
-    
     const rawData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
     Object.keys(rawData).forEach(s => {
-        rawData[s] = rawData[s].map(item => ({
-            count: item.count || 1,
-            unit: item.unit || '入',
-            remark: item.remark || '',
-            ...item
-        }));
+        rawData[s] = rawData[s].map(item => ({ count: item.count || 1, unit: item.unit || '入', remark: item.remark || '', ...item }));
     });
     storeData = rawData;
-
     document.getElementById('ocrTrigger').addEventListener('click', () => document.getElementById('ocr-upload').click());
     document.getElementById('ocr-upload').addEventListener('change', e => performOCR(e.target));
     document.getElementById('btnSave').addEventListener('click', saveRecord);
     document.getElementById('btnCompare').addEventListener('click', comparePrices);
     document.getElementById('closeCompare').addEventListener('click', () => document.getElementById('comparison-area').style.display = 'none');
     document.getElementById('btnClearAll').addEventListener('click', () => { if(confirm("清空？")) { localStorage.clear(); location.reload(); }});
-    
-    refreshUnitDatalist(); // 初始化單位下拉清單
+    refreshUnitDatalist();
     renderTabs();
 };
 </script>
