@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - V3.5.5 🔒</title>
+    <title>精準比價小幫手 - V3.6 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -37,13 +37,13 @@
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.5.5)</h2>
+    <h2 style="text-align:center; margin:0 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.6)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
         <p style="margin:5px 0; font-weight:bold;">拍攝價格牌</p>
         <input type="file" id="ocr-upload" accept="image/*" style="display:none">
-        <span id="ocr-status" class="ocr-status">支援 V3.5.5 正式管理功能</span>
+        <span id="ocr-status" class="ocr-status">支援 V3.6 最小單位價格計算</span>
     </div>
 
     <div class="input-group">
@@ -103,7 +103,7 @@ let unitList = [];
 let editingIndex = null; 
 const DEFAULT_UNITS = ["入","顆","個","克","毫升","c.c.","包","袋","瓶","公升"];
 
-/* 🛡️ V3.5.x 核心辨識引擎 (保留 V3.5.4 強化版) */
+/* 🛡️ V3.5.x 核心辨識引擎 (維持鎖定) */
 function ocrPostProcessor(text) {
     if (!text) return "";
     let processed = text.replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
@@ -144,7 +144,7 @@ async function performOCR(input) {
     } catch(e){ status.innerText="❌ 辨識失敗"; } finally { if(worker) await worker.terminate(); }
 }
 
-/* 🔍 比價核心 (LCS) */
+/* 🔍 比價核心 (LCS) - 維持鎖定 */
 function getLCSLength(s1,s2){
     if(!s1||!s2)return 0;
     let m=s1.length,n=s2.length,max=0;
@@ -185,7 +185,7 @@ function comparePrices(){
     document.getElementById('comparison-area').style.display='block';
 }
 
-/* 📝 分頁與商品管理 (CRUD) */
+/* 📝 分頁與商品管理 (CRUD) - 維持鎖定 */
 function renameStore(oldName) {
     const newName = prompt("將「" + oldName + "」重新命名為：", oldName);
     if (newName && newName.trim() && newName !== oldName) {
@@ -244,6 +244,7 @@ function saveRecord(){
     resetInputs();
 }
 
+/* 🎯本次唯一修改範圍：renderTabs 內部模板，新增單價顯示 */
 function renderTabs(activeStore=null){
     currentActiveStore = activeStore;
     const controls = document.getElementById('tab-controls');
@@ -262,10 +263,12 @@ function renderTabs(activeStore=null){
     const records = storeData[currentActiveStore] || [];
     contents.innerHTML = records.slice().reverse().map((r, i) => {
         const originalIndex = records.length - 1 - i;
+        // 計算最小單位價格邏輯
+        const unitP = r.price / (r.count || 1);
         return `<div class="record-item">
             <div style="flex:1">
                 <b>${escapeHtml(r.name)} (${escapeHtml(r.unit)})</b><br>
-                <small>${r.date} · ${r.count}${escapeHtml(r.unit)}</small>
+                <small>${r.date} · ${r.count}${escapeHtml(r.unit)} (單價: ${unitP.toFixed(2)} / ${escapeHtml(r.unit)})</small>
                 ${r.remark ? `<div class="remark-text">備註: ${escapeHtml(r.remark)}</div>` : ''}
                 <div style="margin-top:8px;">
                     <span class="action-link" onclick="editItem('${currentActiveStore}', ${originalIndex})">✏️ 編輯</span>
@@ -277,7 +280,7 @@ function renderTabs(activeStore=null){
     }).join('');
 }
 
-/* 📐 單位與存儲輔助 */
+/* 📐 單位與存儲輔助 - 維持鎖定 */
 function refreshUnitSelect(targetValue = null) {
     const sel = document.getElementById('unitSelect');
     let usedUnits = [];
