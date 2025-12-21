@@ -1,1 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+   <title>精準比價小幫手 V4.1 - Gemini AI 🚀</title>
+   <style>
+       :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
+       body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
+       .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; position: relative; }
+       .designer-credit { position: absolute; top: 12px; left: 20px; font-size: 10px; color: #bbb; font-weight: bold; }
+       
+       /* ⭐ 置頂 API 設定區 - 醒目的黃色 */
+       .api-top-box { background:#fffbe6; border:2px solid #ffe58f; padding:15px; border-radius:18px; margin-bottom:20px; margin-top:15px; }
+       .api-top-box label { color: #856404; font-size: 14px; display: block; margin-bottom: 8px; font-weight: bold; }
+       .api-input { width:100%; padding:10px; border:1px solid #ffe58f; border-radius:10px; font-size:14px; box-sizing:border-box; }
 
+       .ocr-upload-zone { background:#e6f7ff; border:2px dashed #91d5ff; padding:25px; border-radius:18px; text-align:center; margin-bottom:20px; cursor:pointer; }
+       .ocr-status { font-size:13px; color:#0050b3; font-weight:bold; margin-top:10px; display:block; }
+       .input-group { margin-bottom:15px; }
+       label { display:block; margin-bottom:6px; font-size:14px; font-weight:bold; color:#666; }
+       input, select { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; }
+       button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; margin-bottom:10px; }
+       .btn-save { background:var(--success); color:white; }
+       .btn-compare { background:var(--primary); color:white; }
+       
+       #comparison-area { margin-top:15px; display:none; }
+       .compare-card { background:#f0f7ff; border:1px solid #cce5ff; border-radius:16px; padding:15px; }
+       .compare-item { background:white; border-radius:10px; padding:10px; margin-bottom:8px; border-left:4px solid #ddd; position:relative; }
+       .compare-item.best-cp { border-left-color:var(--warning); background:#fffdf0; }
+       .best-tag { position:absolute; right:10px; top:10px; background:var(--warning); color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; }
+       
+       .tab-controls { display:flex; gap:8px; margin-bottom:10px; justify-content: flex-end; }
+       .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none; }
+       .tab-btn { background:#eee; padding:10px 16px; border-radius:20px; white-space:nowrap; font-size:13px; font-weight:bold; flex-shrink:0; cursor:pointer; }
+       .tab-btn.active { background:var(--primary); color:white; }
+       .record-item { background:#fff; padding:14px; border-radius:14px; margin-bottom:10px; border:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+       .record-price { text-align:right; font-weight:800; color:var(--primary); font-size:18px; }
+       .action-link { font-size:12px; color:var(--primary); margin-right:12px; cursor:pointer; font-weight: bold; }
+       .action-link.delete { color:var(--danger); }
+       .ctrl-mini-btn { font-size:11px; padding:5px 10px; border-radius:8px; background:#f0f0f0; border:1px solid #ddd; }
+   </style>
+</head>
+<body>
+<div class="container">
+   <div class="designer-credit">設計者：Lai Ade</div>
+   <h2 style="text-align:center; margin:10px 0 10px 0; color:var(--primary);">🛒 旗艦比價助手 V4.1</h2>
+
+   <div class="api-top-box">
+       <label>🔑 第一步：請填入您的 Gemini API Key</label>
+       <input type="password" id="apiKey" class="api-input" placeholder="請貼上以 AIza... 開頭的金鑰" onchange="saveApiKey(this.value)">
+       <p style="color:#b29200; font-size:11px; margin-top:5px; margin-bottom:0;">* 貼上後點擊旁邊空白處即自動儲存，系統會記住此 Key</p>
+   </div>
+    
+   <div class="ocr-upload-zone" id="ocrTrigger">
+       <span style="font-size:35px;">📸</span>
+       <p style="margin:5px 0; font-weight:bold;">第二步：拍攝價格牌</p>
+       <input type="file" id="ocr-upload" accept="image/*" style="display:none">
+       <span id="ocr-status" class="ocr-status">等待 API Key...</span>
+   </div>
+
+   <div class="input-group"><label>🏪 商店名稱</label><input type="text" id="storeName" placeholder="例如：全聯、好市多"></div>
+   <div class="input-group"><label>📦 商品名稱</label><input type="text" id="itemName" placeholder="AI 將自動辨識並填入"></div>
+   <div style="display:flex; gap:10px;">
+       <div class="input-group" style="flex:1.5;"><label>💵 總價 (元)</label><input type="number" id="price" inputmode="decimal" placeholder="0" oninput="updateLivePrice()"></div>
+       <div class="input-group" style="flex:1;"><label>🔢 數量</label><input type="number" id="count" value="1" inputmode="numeric" oninput="updateLivePrice()"></div>
+       <div class="input-group" style="flex:1;"><label>📏 單位</label><select id="unitSelect" onchange="handleUnitChange(this); updateLivePrice();"></select></div>
+   </div>
+   <div class="input-group"><label>📝 備註欄</label><input type="text" id="remark" placeholder="買一送一等"></div>
+   
+   <button class="btn-save" id="btnSave">✅ 儲存此紀錄</button>
+   <button class="btn-compare" id="btnCompare">🔍 歷史比價 (CP值)</button>
+   
+   <div id="comparison-area"><div class="compare-card">
+       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+           <h4 style="margin:0; color:#0056b3;">📊 AI 歷史分析</h4>
+           <span id="closeCompare" style="font-size:20px; cursor:pointer;">×</span>
+       </div>
+       <div id="compareList"></div>
+   </div></div>
+
+   <div id="store-tabs-container">
+       <div id="tab-controls" class="tab-controls"></div>
+       <div id="tab-headers" class="tab-headers"></div>
+       <div id="tab-contents"></div>
+   </div>
+
+   <button id="btnClearAll" style="background:none; color:#999; font-size:11px; margin-top:20px; text-decoration:underline; border:none; width:auto; display:block; margin: 20px auto 0 auto;">清空所有資料</button>
+</div>
+
+<script>
+let storeData = {}; let unitList = []; let editingIndex = null;
+const DEFAULT_UNITS = ["入","顆","個","克","毫升","包","袋","瓶","公升"];
+
+function saveApiKey(key){ 
+    if(key.startsWith("Alza")) { key = "AIza" + key.substring(4); } // 自動修復 Alza 錯誤
+    localStorage.setItem('gemini_api_key', key.trim()); 
+    document.getElementById('ocr-status').innerText = "✅ API Key 已就緒，可以拍照！";
+    alert("API Key 已成功儲存！"); 
+}
+
+async function performOCR(input) {
+   const file = input.files[0]; if (!file) return;
+   const apiKey = localStorage.getItem('gemini_api_key');
+   if (!apiKey) { alert("❌ 請先在上方填入 API Key！"); return; }
+
+   const status = document.getElementById('ocr-status');
+   status.innerText = "🧠 AI 視覺分析中...";
+
+   try {
+       const base64Data = await new Promise(r => { const f=new FileReader(); f.onload=()=>r(f.result); f.readAsDataURL(file); });
+       const base64Image = base64Data.split(',')[1];
+
+       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+               contents: [{ parts: [
+                   { text: "你是超市專家。讀取圖片並回傳 JSON：{ 'item': '品名', 'price': 數字 }。只回傳 JSON。" },
+                   { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+               ]}]
+           })
+       });
+
+       const result = await response.json();
+       const aiText = result.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
+       const data = JSON.parse(aiText);
+
+       document.getElementById('itemName').value = data.item;
+       document.getElementById('price').value = data.price;
+       status.innerText = "✅ 辨識完成";
+       updateLivePrice();
+   } catch(e){ status.innerText="❌ 失敗，請檢查 Key 或網路"; console.error(e); }
+}
+
+// 其餘功能維持 V3.6.1 穩定版
+function updateLivePrice() {
+   const p = parseFloat(document.getElementById('price').value) || 0;
+   const c = parseFloat(document.getElementById('count').value) || 1;
+   const u = document.getElementById('unitSelect').value;
+   if (p > 0) document.getElementById('ocr-status').innerText = `💡 單價：$${(p/c).toFixed(2)} / ${u}`;
+}
+
+function saveRecord() {
+   const store=document.getElementById('storeName').value.trim()||"未分類商店";
+   const name=document.getElementById('itemName').value.trim();
+   const price=parseFloat(document.getElementById('price').value);
+   const count=parseInt(document.getElementById('count').value)||1;
+   const unit=document.getElementById('unitSelect').value;
+   if(!name||isNaN(price)) return alert("請輸入正確品名與價格");
+   if(!storeData[store]) storeData[store]=[];
+   storeData[store].push({name,price,count,unit,date:new Date().toLocaleDateString()});
+   localStorage.setItem('storeTabsData',JSON.stringify(storeData));
+   renderTabs(store); resetInputs();
+}
+
+function renderTabs(activeStore=null){
+   const headers = document.getElementById('tab-headers'), contents = document.getElementById('tab-contents');
+   const storeNames = Object.keys(storeData);
+   if(storeNames.length === 0){ contents.innerHTML = '<p style="text-align:center;color:#ccc;">尚無紀錄</p>'; return; }
+   if(!activeStore) activeStore = storeNames[storeNames.length-1];
+   headers.innerHTML = storeNames.map(n => `<div class="tab-btn ${n === activeStore ? 'active' : ''}" onclick="renderTabs('${n}')">${n}</div>`).join('');
+   const records = storeData[activeStore] || [];
+   contents.innerHTML = records.slice().reverse().map((r, i) => `
+       <div class="record-item">
+           <div><b>${r.name}</b><br><small>${r.date} · ${r.count}${r.unit}</small></div>
+           <div class="record-price">$${r.price}</div>
+       </div>`).join('');
+}
+
+function refreshUnitSelect(target = "入") {
+   document.getElementById('unitSelect').innerHTML = DEFAULT_UNITS.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + '<option value="ADD_NEW">➕ 新增...</option>';
+}
+function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("輸入新單位:"); if(n) refreshUnitSelect(n); } }
+function resetInputs(){ document.getElementById('itemName').value=''; document.getElementById('price').value=''; }
+
+window.onload=()=>{
+   storeData=JSON.parse(localStorage.getItem('storeTabsData'))||{};
+   const savedKey = localStorage.getItem('gemini_api_key');
+   if(savedKey) { document.getElementById('apiKey').value = savedKey; document.getElementById('ocr-status').innerText = "✅ API Key 已就緒"; }
+   document.getElementById('ocrTrigger').onclick=()=>document.getElementById('ocr-upload').click();
+   document.getElementById('ocr-upload').onchange=e=>performOCR(e.target);
+   document.getElementById('btnSave').onclick=saveRecord;
+   document.getElementById('closeCompare').onclick=()=>document.getElementById('comparison-area').style.display='none';
+   document.getElementById('btnClearAll').onclick=()=>{if(confirm("清空？")){localStorage.clear(); location.reload();}};
+   refreshUnitSelect(); renderTabs();
+};
+</script>
+</body>
+</html>
