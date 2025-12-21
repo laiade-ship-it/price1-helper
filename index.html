@@ -1,159 +1,249 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>精準比價小幫手 - V4.5.2 終極收斂版</title>
+    <title>精準比價小幫手 - V3.6.1 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
-        .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; }
-        .ocr-upload-zone { background:#fffbe6; border:2px dashed #ffe58f; padding:25px; border-radius:18px; text-align:center; margin-bottom:20px; cursor:pointer; }
+        .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; position: relative; }
+        
+        /* 🎨 新增：設計者標記 */
+        .designer-credit { position: absolute; top: 12px; left: 20px; font-size: 10px; color: #bbb; font-weight: bold; letter-spacing: 0.5px; }
+
+        .ocr-upload-zone { background:#fffbe6; border:2px dashed #ffe58f; padding:25px; border-radius:18px; text-align:center; margin-bottom:20px; cursor:pointer; margin-top: 15px; }
         .ocr-status { font-size:13px; color:#856404; font-weight:bold; margin-top:10px; display:block; }
         .input-group { margin-bottom:15px; }
         label { display:block; margin-bottom:6px; font-size:14px; font-weight:bold; color:#666; }
-        input { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; }
-        button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; margin-bottom:10px; }
+        input, select { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; box-sizing:border-box; outline:none; background: white; }
+        button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; margin-bottom:10px; transition: 0.2s; }
         .btn-save { background:var(--success); color:white; }
+        .btn-compare { background:var(--primary); color:white; }
+        #comparison-area { margin-top:15px; display:none; }
+        .compare-card { background:#f0f7ff; border:1px solid #cce5ff; border-radius:16px; padding:15px; }
+        .compare-item { background:white; border-radius:10px; padding:10px; margin-bottom:8px; border-left:4px solid #ddd; position:relative; }
+        .compare-item.best-cp { border-left-color:var(--warning); background:#fffdf0; }
+        .best-tag { position:absolute; right:10px; top:10px; background:var(--warning); color:#856404; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:bold; }
         #store-tabs-container { margin-top:25px; border-top:2px solid #f0f0f0; padding-top:20px; }
-        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; }
-        .tab-btn { background:#eee; padding:10px 16px; border-radius:20px; white-space:nowrap; font-size:13px; cursor:pointer; }
+        .tab-controls { display:flex; gap:8px; margin-bottom:10px; justify-content: flex-end; }
+        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; scrollbar-width:none; }
+        .tab-btn { background:#eee; padding:10px 16px; border-radius:20px; white-space:nowrap; font-size:13px; font-weight:bold; flex-shrink:0; cursor:pointer; }
         .tab-btn.active { background:var(--primary); color:white; }
         .record-item { background:#fff; padding:14px; border-radius:14px; margin-bottom:10px; border:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        .record-price { text-align:right; font-weight:800; color:var(--primary); font-size:18px; }
+        .action-link { font-size:12px; color:var(--primary); margin-right:12px; cursor:pointer; text-decoration: none; font-weight: bold; }
+        .action-link.delete { color:var(--danger); }
+        .remark-text { font-size: 11px; color: #888; margin-top: 3px; font-style: italic; }
+        .ctrl-mini-btn { font-size:11px; padding:5px 10px; border-radius:8px; background:#f0f0f0; border:1px solid #ddd; cursor:pointer; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary);">🛒 比價助手 V4.5.2</h2>
+    <div class="designer-credit">設計者：Lai Ade</div>
+    <h2 style="text-align:center; margin:10px 0 20px 0; color:var(--primary);">🛒 旗艦比價助手 (V3.6.1)</h2>
     
     <div class="ocr-upload-zone" id="ocrTrigger">
         <span style="font-size:35px;">📸</span>
-        <p style="margin:5px 0; font-weight:bold;">拍攝價格牌 (已優化收斂邏輯)</p>
+        <p style="margin:5px 0; font-weight:bold;">拍攝價格牌</p>
         <input type="file" id="ocr-upload" accept="image/*" style="display:none">
-        <span id="ocr-status" class="ocr-status">等待上傳...</span>
+        <span id="ocr-status" class="ocr-status">支援 V3.6.1 最小單位價格計算</span>
     </div>
 
-    <div class="input-group"><label>📦 商品名稱</label><input type="text" id="itemName" placeholder="自動辨識中..."></div>
+    <div class="input-group"><label>🏪 商店名稱</label><input type="text" id="storeName" placeholder="例如：全聯、好市多"></div>
+    <div class="input-group"><label>📦 商品名稱</label><input type="text" id="itemName" placeholder="辨識結果將出現在此"></div>
     <div style="display:flex; gap:10px;">
-        <div class="input-group" style="flex:1.5;"><label>💵 總價 (元)</label><input type="number" id="price" placeholder="0"></div>
-        <div class="input-group" style="flex:1;"><label>🔢 數量</label><input type="number" id="count" value="1"></div>
+        <div class="input-group" style="flex:1.5;"><label>💵 總價 (元)</label><input type="number" id="price" inputmode="decimal" placeholder="0" oninput="updateLivePrice()"></div>
+        <div class="input-group" style="flex:1;"><label>🔢 數量</label><input type="number" id="count" value="1" inputmode="numeric" oninput="updateLivePrice()"></div>
+        <div class="input-group" style="flex:1;"><label>📏 單位</label><select id="unitSelect" onchange="handleUnitChange(this); updateLivePrice();"></select></div>
     </div>
-    <button class="btn-save" id="btnSave">✅ 儲存紀錄</button>
-
-    <div id="store-tabs-container">
-        <div id="tab-headers" class="tab-headers"></div>
-        <div id="tab-contents"></div>
-    </div>
+    <div class="input-group"><label>📝 備註欄</label><input type="text" id="remark" placeholder="買一送一等"></div>
+    <button class="btn-save" id="btnSave">✅ 儲存此紀錄</button>
+    <button class="btn-compare" id="btnCompare">🔍 歷史比價 (CP值)</button>
+    <div id="comparison-area"><div class="compare-card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;"><h4 style="margin:0; color:#0056b3;">📊 比價分析結果 (LCS ≥ 2)</h4><span id="closeCompare" style="font-size:20px; cursor:pointer;">×</span></div><div id="compareList"></div></div></div>
+    <div id="store-tabs-container"><div id="tab-controls" class="tab-controls"></div><div id="tab-headers" class="tab-headers"></div><div id="tab-contents"></div></div>
+    <button id="btnClearAll" style="background:none; color:#999; font-size:12px; margin-top:20px; text-decoration:underline; border:none; width:auto; display:block; margin: 20px auto 0 auto;">清空所有資料</button>
 </div>
 
 <script>
-/**
- * V4.5.2 核心修復邏輯
- */
+// JavaScript 邏輯完全繼承 V3.6.1，包含即時單價與歷史單價顯示
+let storeData = {}; let currentActiveStore = null; let unitList = []; let editingIndex = null; 
+const DEFAULT_UNITS = ["入","顆","個","克","毫升","c.c.","包","袋","瓶","公升"];
 
-// 1. 影像預處理：解決 "Image too small" 與 "Line cannot be recognized"
-async function preprocessImage(file) {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                // 強行放大 2.5 倍，確保小字體被看見
-                canvas.width = img.width * 2.5;
-                canvas.height = img.height * 2.5;
-                // 提高對比度與亮度，過濾掉夾層反光
-                ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-}
-
-// 2. 行為收斂過濾：針對 PDF 裡出現的噪音進行大屠殺
-function layer1_Refine(ocrLines) {
-    const rules = {
-        isBarcode: (s) => /^\d{13}$/.test(s.replace(/\s/g, '')), // 排除 471 條碼
-        isCode: (s) => /\d{2,}-\d{5,}/.test(s), // 排除 14-105934-001 管理碼
-        isUnitPrice: (s) => /元\/(100)?(g|ml|克|毫升)/.test(s) || s.includes('平均1件'), // 排除單價
-        isDate: (s) => /\d{1,2}\/\d{1,2}/.test(s) // 排除活動日期
-    };
-
-    let prices = [];
-    let names = [];
-
-    ocrLines.forEach(line => {
-        const text = line.trim();
-        if (rules.isBarcode(text) || rules.isCode(text) || rules.isDate(text)) return;
-
-        // 提取純數字價格，排除掉帶有「件」或「/」的干擾項
-        if (!rules.isUnitPrice(text) && !text.includes('1件')) {
-            const match = text.match(/(\d{1,4})/);
-            if (match) {
-                prices.push({
-                    val: parseInt(match[1]),
-                    isStrong: /^\d+$/.test(text) // 只有數字的行，權重最高
-                });
-            }
-        }
-
-        // 提取長度適中的文字作為品名
-        if (text.length > 3 && !/^\d+$/.test(text) && !rules.isUnitPrice(text)) {
-            names.push(text);
-        }
-    });
-
-    return { names, prices };
-}
-
-async function performOCR(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
+function updateLivePrice() {
+    const p = parseFloat(document.getElementById('price').value) || 0;
+    const c = parseFloat(document.getElementById('count').value) || 1;
+    const u = document.getElementById('unitSelect').value;
     const status = document.getElementById('ocr-status');
-    status.innerText = "⏳ 影像預處理中...";
+    if (p > 0) status.innerText = `💡 即時單價：$${(p/c).toFixed(2)} / ${u}`;
+    else status.innerText = "支援 V3.6.1 最小單位價格計算";
+}
 
-    // 第一步：影像手術
-    const processedImg = await preprocessImage(file);
-    
-    status.innerText = "🔍 正在執行收斂辨識...";
-    const worker = await Tesseract.createWorker('chi_tra');
-    
+function ocrPostProcessor(text) {
+    if (!text) return "";
+    let processed = text.replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+    processed = processed.replace(/　/g, " ").replace(/齊\s*升/g, "毫升").replace(/(\d)\s*人/g, "$1入");
+    const chineseSpaceRegex = /([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g;
+    return processed.replace(chineseSpaceRegex, "$1$2").trim();
+}
+
+async function performOCR(input) {
+    if (!input.files[0]) return;
+    const status = document.getElementById('ocr-status');
+    status.innerText = "⏳ 深度辨識中...";
+    let worker;
     try {
-        const { data: { lines } } = await worker.recognize(processedImg);
-        const rawTexts = lines.map(l => l.text.trim()).filter(Boolean);
-        
-        // 第二步：邏輯過濾 (Layer 1)
-        const refined = layer1_Refine(rawTexts);
-        
-        // 第三步：模擬 AI 選擇 (Layer 2)
-        // 優先選取「裸數字」且不是條碼的項目
-        refined.prices.sort((a, b) => (b.isStrong ? 1 : 0) - (a.isStrong ? 1 : 0));
-        
-        if (refined.prices.length > 0) {
-            document.getElementById('price').value = refined.prices[0].val;
-        }
-        
-        // 組合品名 (選取前兩段描述)
-        const finalName = refined.names.slice(0, 2).join(' ').replace(/特價|元/g, '');
-        document.getElementById('itemName').value = finalName || "請手動輸入";
+        worker = await Tesseract.createWorker('chi_tra+eng');
+        const { data } = await worker.recognize(input.files[0]);
+        const lines = (data.lines || []).map(l => l.text.trim()).filter(Boolean);
+        let nameLines = [], priceCandidates = [];
+        const priceSemantic = /(?:NT\$|\$|特價|售價|金額|總計|價格)[:：\s]*([\d,]{2,7})/i;
+        lines.forEach(line => {
+            const cleanLine = ocrPostProcessor(line);
+            const sMatch = cleanLine.match(priceSemantic);
+            if (sMatch) priceCandidates.push({ val: parseInt(sMatch[1].replace(/,/g, '')), score: 100 });
+            const pMatches = cleanLine.match(/\b\d{2,5}\b/g);
+            if (pMatches) pMatches.forEach(m => { const v = parseInt(m); if (v > 15) priceCandidates.push({ val: v, score: 50 }); });
+            if (/[\u4e00-\u9fa5]/.test(cleanLine) && nameLines.length < 2 && !priceSemantic.test(cleanLine) && !/^\d+$/.test(cleanLine)) {
+                nameLines.push(cleanLine.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, '').trim());
+            }
+        });
+        priceCandidates.sort((a,b)=>b.score - a.score || a.val - b.val);
+        document.getElementById('itemName').value = nameLines.join(' ');
+        if (priceCandidates.length > 0) document.getElementById('price').value = priceCandidates[0].val;
+        updateLivePrice();
+        status.innerText = "✅ 辨識完成";
+    } catch(e){ status.innerText="❌ 辨識失敗"; } finally { if(worker) await worker.terminate(); }
+}
 
-        status.innerText = "✅ 辨識成功：已自動排除噪音";
-    } catch (err) {
-        status.innerText = "❌ 辨識失敗，請重新拍攝";
-    } finally {
-        await worker.terminate();
+function getLCSLength(s1,s2){
+    if(!s1||!s2)return 0;
+    let m=s1.length, n=s2.length, max=0;
+    let table=Array(m+1).fill(0).map(()=>Array(n+1).fill(0));
+    for(let i=1;i<=m;i++) {
+        for(let j=1;j<=n;j++) {
+            if(s1[i-1]===s2[j-1]){ table[i][j]=table[i-1][j-1]+1; max=Math.max(max,table[i][j]); }
+        }
+    }
+    return max;
+}
+
+function comparePrices(){
+    const query = document.getElementById('itemName').value.trim();
+    const currentUnit = document.getElementById('unitSelect').value;
+    if(query.length < 1) return alert("請先輸入品名");
+    let matches = [];
+    Object.keys(storeData).forEach(store => {
+        storeData[store].forEach((item, index) => {
+            const lcs = getLCSLength(query, item.name);
+            if(lcs >= 2) matches.push({ ...item, store, index, matchScore: lcs, unitPrice: item.price / (item.count || 1) });
+        });
+    });
+    if(matches.length === 0) return alert("找不到相似紀錄");
+    const sameUnitMatches = matches.filter(m => (m.unit || '入') === currentUnit);
+    const minUnitPrice = sameUnitMatches.length > 0 ? Math.min(...sameUnitMatches.map(m => m.unitPrice)) : null;
+    const listContainer = document.getElementById('compareList');
+    listContainer.innerHTML = matches.map(m => {
+        const itemUnit = m.unit || '入';
+        const isBest = (itemUnit === currentUnit) && minUnitPrice && Math.abs(m.unitPrice - minUnitPrice) < 0.01;
+        return `<div class="compare-item ${isBest ? 'best-cp' : ''}">
+            ${isBest ? '<span class="best-tag">🏆 同單位最高CP</span>' : ''}
+            <div style="font-weight:bold; font-size:14px;">${escapeHtml(m.name)}</div>
+            <div style="font-size:11px; color:#666;">📍 ${escapeHtml(m.store)} | $${m.price} (${m.count}${itemUnit})<br>單價: ${m.unitPrice.toFixed(2)} / ${escapeHtml(itemUnit)}</div>
+        </div>`;
+    }).join('');
+    document.getElementById('comparison-area').style.display = 'block';
+}
+
+function saveRecord() {
+    const store=document.getElementById('storeName').value.trim()||"未分類商店";
+    const name=document.getElementById('itemName').value.trim();
+    const price=parseFloat(document.getElementById('price').value);
+    const count=parseInt(document.getElementById('count').value)||1;
+    const unit=document.getElementById('unitSelect').value;
+    const remark=document.getElementById('remark').value.trim();
+    if(!name||isNaN(price)) return alert("請輸入正確品名與價格");
+    if (editingIndex) {
+        storeData[editingIndex.store].splice(editingIndex.index, 1);
+        if (storeData[editingIndex.store].length === 0) delete storeData[editingIndex.store];
+        editingIndex = null;
+        const btn = document.getElementById('btnSave');
+        btn.innerText = "✅ 儲存此紀錄"; btn.style.background = "var(--success)";
+    }
+    if(!storeData[store]) storeData[store]=[];
+    storeData[store].push({name,price,count,unit,remark,date:new Date().toLocaleDateString()});
+    saveToStorage(); renderTabs(store); resetInputs();
+}
+
+function renderTabs(activeStore=null){
+    currentActiveStore = activeStore;
+    const controls = document.getElementById('tab-controls'), headers = document.getElementById('tab-headers'), contents = document.getElementById('tab-contents');
+    const storeNames = Object.keys(storeData);
+    if(storeNames.length === 0){
+        controls.innerHTML = ''; headers.innerHTML = ''; contents.innerHTML = '<p style="text-align:center;color:#ccc;padding:20px;">尚無紀錄</p>';
+        return;
+    }
+    if(!currentActiveStore || !storeData[currentActiveStore]) currentActiveStore = storeNames[storeNames.length-1];
+    controls.innerHTML = `<span class="ctrl-mini-btn" onclick="renameStore('${currentActiveStore}')">📝 改店名</span><span class="ctrl-mini-btn" style="color:var(--danger)" onclick="deleteStore('${currentActiveStore}')">🗑️ 刪除店</span>`;
+    headers.innerHTML = storeNames.map(n => `<div class="tab-btn ${n === currentActiveStore ? 'active' : ''}" onclick="renderTabs('${n}')">${escapeHtml(n)}</div>`).join('');
+    const records = storeData[currentActiveStore] || [];
+    contents.innerHTML = records.slice().reverse().map((r, i) => {
+        const originalIndex = records.length - 1 - i;
+        const unitP = r.price / (r.count || 1);
+        return `<div class="record-item"><div style="flex:1"><b>${escapeHtml(r.name)} (${escapeHtml(r.unit)})</b><br><small>${r.date} · ${r.count}${escapeHtml(r.unit)} (單價: ${unitP.toFixed(2)} / ${escapeHtml(r.unit)})</small>${r.remark ? `<div class="remark-text">備註: ${escapeHtml(r.remark)}</div>` : ''}<div style="margin-top:8px;"><span class="action-link" onclick="editItem('${currentActiveStore}', ${originalIndex})">✏️ 編輯</span><span class="action-link delete" onclick="deleteRecord('${currentActiveStore}', ${originalIndex})">🗑️ 刪除</span></div></div><div class="record-price">$${r.price}</div></div>`;
+    }).join('');
+}
+
+function renameStore(oldName) {
+    const newName = prompt("將「" + oldName + "」重新命名為：", oldName);
+    if (newName && newName.trim() && newName !== oldName) {
+        if (storeData[newName]) return alert("此店名已存在！");
+        storeData[newName.trim()] = storeData[oldName]; delete storeData[oldName];
+        saveToStorage(); renderTabs(newName.trim());
     }
 }
+function deleteStore(storeName) { if (confirm("確定刪除商店「" + storeName + "」及其內容？")) { delete storeData[storeName]; saveToStorage(); renderTabs(); } }
+function editItem(store, index) {
+    const item = storeData[store][index];
+    document.getElementById('storeName').value = store; document.getElementById('itemName').value = item.name;
+    document.getElementById('price').value = item.price; document.getElementById('count').value = item.count;
+    document.getElementById('remark').value = item.remark || ''; refreshUnitSelect(item.unit);
+    editingIndex = { store, index }; const btn = document.getElementById('btnSave');
+    btn.innerText = "🆙 更新紀錄 (取代原項目)"; btn.style.background = "var(--primary)";
+    updateLivePrice(); window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function refreshUnitSelect(targetValue = null) {
+    const sel = document.getElementById('unitSelect');
+    let usedUnits = []; Object.values(storeData).forEach(sItems => sItems.forEach(i => { if(i.unit) usedUnits.push(i.unit); }));
+    let combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList, ...usedUnits]));
+    sel.innerHTML = combined.map(u => `<option value="${u}" ${u === targetValue ? 'selected' : ''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增...</option>`;
+}
+function handleUnitChange(sel) {
+    if (sel.value === "ADD_NEW") {
+        const n = prompt("輸入新單位:");
+        if (n && n.trim()) { unitList.push(n.trim()); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n.trim()); }
+    }
+}
+function deleteRecord(store,index){ if(confirm("確定刪除紀錄？")){ storeData[store].splice(index,1); if(storeData[store].length===0) delete storeData[store]; saveToStorage(); renderTabs(storeData[store] ? store : null); } }
+function saveToStorage(){ localStorage.setItem('storeTabsData',JSON.stringify(storeData)); }
+function resetInputs(){
+    document.getElementById('itemName').value=''; document.getElementById('price').value=''; document.getElementById('remark').value=''; document.getElementById('count').value='1';
+    document.getElementById('ocr-status').innerText = "支援 V3.6.1 最小單位價格計算";
+}
+function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 
-// 綁定事件
-document.getElementById('ocrTrigger').onclick = () => document.getElementById('ocr-upload').click();
-document.getElementById('ocr-upload').onchange = performOCR;
+window.onload=()=>{
+    unitList=JSON.parse(localStorage.getItem('managedUnits'))||[];
+    storeData=JSON.parse(localStorage.getItem('storeTabsData'))||{};
+    document.getElementById('ocrTrigger').onclick=()=>document.getElementById('ocr-upload').click();
+    document.getElementById('ocr-upload').onchange=e=>performOCR(e.target);
+    document.getElementById('btnSave').onclick=saveRecord;
+    document.getElementById('btnCompare').onclick=comparePrices;
+    document.getElementById('closeCompare').onclick=()=>document.getElementById('comparison-area').style.display='none';
+    document.getElementById('btnClearAll').onclick=()=> {if(confirm("清空所有資料？")){localStorage.clear(); location.reload();}};
+    refreshUnitSelect(); renderTabs();
+};
 </script>
 </body>
 </html>
