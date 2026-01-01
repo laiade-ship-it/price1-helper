@@ -3,41 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旗艦比價助手 V3.6.4 🔒</title>
+    <title>旗艦比價助手 V3.6.5 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
         .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; }
         
+        /* ⚡ 即時比價面板樣式 */
+        #compPanel { background: #fff7e6; border: 1px solid #ffd591; border-radius: 15px; padding: 12px; margin-bottom: 15px; display: none; }
+        .comp-title { font-size: 13px; color: #d46b08; font-weight: bold; margin-bottom: 8px; }
+        .comp-item { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; border-bottom: 1px dashed #ffd591; padding-bottom: 3px; }
+        .comp-best { color: #cf1322; font-weight: 800; }
+
         /* 📸 照片區 */
         .photo-upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
         .photo-slot { aspect-ratio: 1; border: 2px dashed #ddd; border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; background: #fafafa; overflow: hidden; font-size: 24px; color: #ccc; }
         .photo-slot img { width: 100%; height: 100%; object-fit: cover; }
-        .photo-slot .remove-p { position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.7); color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; text-align: center; line-height: 20px; }
+        .photo-slot .remove-p { position: absolute; top: 2px; right: 2px; background: rgba(255,0,0,0.7); color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; text-align: center; line-height: 20px; z-index: 10; }
 
-        /* ⚡ 比價與單價區 */
-        .comparison-panel { background: #fff7e6; border: 1px solid #ffd591; border-radius: 15px; padding: 12px; margin-bottom: 15px; display: none; }
-        .comp-title { font-size: 13px; color: #d46b08; font-weight: bold; margin-bottom: 8px; }
-        .comp-item { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; border-bottom: 1px dashed #ffd591; padding-bottom: 3px; }
+        /* 💡 計算區 */
         .unit-price-box { background: #eef6ff; border: 1px solid #d0e7ff; padding: 12px; border-radius: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .unit-price-value { font-size: 20px; font-weight: 800; color: #0056b3; }
 
-        /* 輸入區 */
         .input-group { margin-bottom:12px; }
         label { display:block; margin-bottom:4px; font-size:13px; font-weight:bold; color:#666; }
         input, select { width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; font-size:15px; box-sizing:border-box; outline:none; }
+        
         button { width:100%; padding:14px; border:none; border-radius:14px; font-size:16px; font-weight:bold; cursor:pointer; }
         .btn-save { background:var(--success); color:white; margin-top: 10px;}
 
         /* 📁 資料夾區域 */
-        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+        .tab-headers { display:flex; gap:8px; overflow-x:auto; padding-bottom:12px; margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
         .tab-btn { background:#eee; padding:8px 16px; border-radius:20px; font-size:13px; cursor:pointer; font-weight:bold; white-space:nowrap; }
         .tab-btn.active { background:var(--primary); color:white; }
         
         .record-item { background:#fff; padding:15px; border-radius:16px; margin-bottom:12px; border:1px solid #eee; position: relative; }
         .record-photos { display: flex; gap: 8px; margin-top: 10px; }
-        .record-photos img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; }
+        .record-photos img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; cursor: zoom-in; }
         
         .action-links { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #eee; display: flex; gap: 15px; }
         .btn-edit { color: var(--primary); cursor: pointer; font-size: 13px; font-weight: bold; }
@@ -52,12 +55,15 @@
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
 
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary); margin:0 0 15px 0;">🛒 旗艦比價助手 V3.6.4</h2>
+    <h2 style="text-align:center; color:var(--primary); margin:0 0 15px 0;">🛒 旗艦比價助手 V3.6.5</h2>
 
-    <div class="comparison-panel" id="compPanel"><div class="comp-title">🔍 歷史最低價：</div><div id="compList"></div></div>
+    <div id="compPanel">
+        <div class="comp-title">🔍 歷史比價參考：</div>
+        <div id="compList"></div>
+    </div>
 
     <div class="unit-price-box">
-        <div style="font-size:12px; color:#666;">💡 本次換算單價</div>
+        <div style="font-size:12px; color:#666;">💡 換算單價</div>
         <div class="unit-price-value" id="calcResult">-- / 單位</div>
     </div>
 
@@ -68,8 +74,8 @@
     </div>
     <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFile(this)">
 
-    <div class="input-group"><label>📦 品名</label><input type="text" id="itemName" oninput="liveCompare()"></div>
-    <div class="input-group"><label>🏪 商店</label><input type="text" id="storeName"></div>
+    <div class="input-group"><label>📦 商品名稱</label><input type="text" id="itemName" oninput="liveCompare()" placeholder="輸入品名自動比價"></div>
+    <div class="input-group"><label>🏪 商店名稱</label><input type="text" id="storeName" placeholder="全聯、好市多..."></div>
     
     <div style="display:flex; gap:10px;">
         <div class="input-group" style="flex:1.5;"><label>💵 總價</label><input type="number" id="price" oninput="updateCalculation()" inputmode="decimal"></div>
@@ -80,7 +86,7 @@
     <button class="btn-save" id="btnSave" onclick="saveRecord()">✅ 儲存此紀錄</button>
 
     <div id="tab-controls" style="text-align:right; margin-top:15px; display:none;">
-        <small id="delStoreBtn" style="color:var(--danger); cursor:pointer; font-weight:bold;">🗑️ 刪除整個商店</small>
+        <small id="delStoreBtn" style="color:var(--danger); cursor:pointer; font-weight:bold; background:#fff1f0; padding:4px 8px; border-radius:8px;">🗑️ 刪除整個商店</small>
     </div>
     <div id="tab-headers" class="tab-headers"></div>
     <div id="tab-contents"></div>
@@ -92,9 +98,48 @@ let unitList = [];
 let currentPhotos = [null, null, null];
 let editingTarget = null;
 let currentSlotIndex = 0;
-const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)"];
+const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)","公斤(kg)"];
 
-// --- 💾 核心儲存與分頁 ---
+// --- ⚡ 核心功能：即時比價 ---
+function liveCompare() {
+    const name = document.getElementById('itemName').value.trim();
+    const panel = document.getElementById('compPanel');
+    const list = document.getElementById('compList');
+    
+    if (name.length < 1) { panel.style.display = 'none'; return; }
+
+    let matches = [];
+    Object.keys(storeData).forEach(store => {
+        storeData[store].forEach(item => {
+            if (item.name.toLowerCase().includes(name.toLowerCase())) {
+                matches.push({ store, ...item });
+            }
+        });
+    });
+
+    if (matches.length > 0) {
+        matches.sort((a, b) => a.unitPrice - b.unitPrice);
+        panel.style.display = 'block';
+        list.innerHTML = matches.slice(0, 3).map((m, i) => `
+            <div class="comp-item">
+                <span><b>${m.store}</b> - ${m.name}</span>
+                <span class="${i===0?'comp-best':''}">$${m.unitPrice} / ${m.unit}</span>
+            </div>
+        `).join('');
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// --- 📏 核心功能：單價計算 ---
+function updateCalculation() {
+    const p = parseFloat(document.getElementById('price').value) || 0;
+    const c = parseFloat(document.getElementById('count').value) || 1;
+    const u = document.getElementById('unitSelect').value;
+    document.getElementById('calcResult').innerText = p > 0 ? `$${(p/c).toFixed(2)} / ${u}` : `-- / 單位`;
+}
+
+// --- 💾 儲存與分頁 ---
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類";
     const name = document.getElementById('itemName').value.trim();
@@ -104,7 +149,6 @@ function saveRecord() {
 
     if (!name || isNaN(price)) return alert("請填寫品名與價格");
 
-    // 如果是編輯模式，先刪除舊的那一筆
     if (editingTarget) {
         storeData[editingTarget.store].splice(editingTarget.index, 1);
         if (storeData[editingTarget.store].length === 0) delete storeData[editingTarget.store];
@@ -160,7 +204,7 @@ function renderTabs(activeStore = null) {
     `}).join('');
 }
 
-// --- 🛠️ 編輯與刪除功能 ---
+// --- 🛠️ 編輯、刪除、單位管理 ---
 function editItem(store, index) {
     const item = storeData[store][index];
     document.getElementById('storeName').value = store;
@@ -168,21 +212,19 @@ function editItem(store, index) {
     document.getElementById('price').value = item.price;
     document.getElementById('count').value = item.count;
     refreshUnitSelect(item.unit);
-    
-    // 載入照片回相框
     currentPhotos = [null, null, null];
     if (item.photos) item.photos.forEach((p, i) => currentPhotos[i] = p);
     renderPhotoSlots();
-    
     editingTarget = { store, index };
-    document.getElementById('btnSave').innerText = "🆙 更新這筆紀錄";
+    document.getElementById('btnSave').innerText = "🆙 更新紀錄";
     document.getElementById('btnSave').style.background = "var(--primary)";
-    window.scrollTo({top: 0, behavior: 'smooth'});
     updateCalculation();
+    liveCompare();
+    window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function deleteItem(store, index) {
-    if (confirm("確定刪除這筆資料？")) {
+    if (confirm("確定刪除？")) {
         storeData[store].splice(index, 1);
         if (storeData[store].length === 0) delete storeData[store];
         localStorage.setItem('storeTabsData', JSON.stringify(storeData));
@@ -191,14 +233,22 @@ function deleteItem(store, index) {
 }
 
 function deleteStore(store) {
-    if (confirm(`確定刪除整個「${store}」資料夾？`)) {
+    if (confirm(`確定刪除「${store}」整個商店紀錄？`)) {
         delete storeData[store];
         localStorage.setItem('storeTabsData', JSON.stringify(storeData));
         renderTabs();
     }
 }
 
-// --- 📸 照片處理邏輯 ---
+function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("新單位:"); if(n){ unitList.push(n); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n); } } }
+
+function refreshUnitSelect(target=null) {
+    const sel = document.getElementById('unitSelect');
+    const combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList]));
+    sel.innerHTML = combined.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增</option>`;
+}
+
+// --- 📸 照片處理 ---
 function triggerFile(index) { currentSlotIndex = index; document.getElementById('file-input').click(); }
 async function handleFile(input) {
     if (!input.files[0]) return;
@@ -233,48 +283,22 @@ function renderPhotoSlots() {
         document.getElementById(`slot-${i}`).innerHTML = data ? `<img src="${data}"><div class="remove-p" onclick="event.stopPropagation();currentPhotos[${i}]=null;renderPhotoSlots()">×</div>` : `+`;
     });
 }
-
-// --- ⚡ 其他工具 ---
-function liveCompare() {
-    const name = document.getElementById('itemName').value.trim();
-    const panel = document.getElementById('compPanel');
-    const list = document.getElementById('compList');
-    if (name.length < 1) { panel.style.display = 'none'; return; }
-    let matches = [];
-    Object.keys(storeData).forEach(s => {
-        storeData[s].forEach(item => { if (item.name.toLowerCase().includes(name.toLowerCase())) matches.push({ store:s, ...item }); });
-    });
-    if (matches.length > 0) {
-        matches.sort((a, b) => a.unitPrice - b.unitPrice);
-        panel.style.display = 'block';
-        list.innerHTML = matches.slice(0, 2).map(m => `<div class="comp-item"><span><b>${m.store}</b></span><span>$${m.unitPrice}/${m.unit}</span></div>`).join('');
-    } else { panel.style.display = 'none'; }
-}
-function updateCalculation() {
-    const p = parseFloat(document.getElementById('price').value) || 0;
-    const c = parseFloat(document.getElementById('count').value) || 1;
-    const u = document.getElementById('unitSelect').value;
-    document.getElementById('calcResult').innerText = p > 0 ? `$${(p/c).toFixed(2)} / ${u}` : `-- / 單位`;
-}
-function resetForm() {
-    document.getElementById('itemName').value = ""; document.getElementById('price').value = "";
-    document.getElementById('count').value = "1"; document.getElementById('btnSave').innerText = "✅ 儲存此紀錄";
-    document.getElementById('btnSave').style.background = "var(--success)";
-    document.getElementById('compPanel').style.display = 'none';
-}
-function refreshUnitSelect(target=null) {
-    const sel = document.getElementById('unitSelect');
-    const combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList]));
-    sel.innerHTML = combined.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增</option>`;
-}
-function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("新單位:"); if(n){ unitList.push(n); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n); } } }
 function openLightbox(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').style.display = 'flex'; }
+
 async function performOCR(file) {
     const worker = await Tesseract.createWorker('chi_tra');
     const { data: { text } } = await worker.recognize(file);
     document.getElementById('itemName').value = text.split('\n')[0].trim();
     liveCompare();
     await worker.terminate();
+}
+
+function resetForm() {
+    document.getElementById('itemName').value = ""; document.getElementById('price').value = "";
+    document.getElementById('count').value = "1"; document.getElementById('btnSave').innerText = "✅ 儲存此紀錄";
+    document.getElementById('btnSave').style.background = "var(--success)";
+    document.getElementById('compPanel').style.display = 'none';
+    document.getElementById('calcResult').innerText = "-- / 單位";
 }
 
 window.onload = () => {
