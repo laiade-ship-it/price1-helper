@@ -3,222 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的雲端筆記 (LocalStorage + IndexedDB)</title>
+    <title>商品比價助手 V3.6.1 - 專業版</title>
     <style>
-        /* CSS 樣式設定 */
         :root {
-            --bg-color: #f4f7f6;
-            --text-color: #333;
-            --card-bg: #ffffff;
-            --primary-color: #4a90e2;
-            --accent-color: #e74c3c;
+            --bg: #f5f7f9; --text: #333; --card: #fff; --primary: #007bff;
+            --success: #28a745; --danger: #dc3545; --border: #dee2e6;
         }
-
         body.dark-mode {
-            --bg-color: #1e1e1e;
-            --text-color: #f0f0f0;
-            --card-bg: #2d2d2d;
-            --primary-color: #357abd;
+            --bg: #121212; --text: #e0e0e0; --card: #1e1e1e; --border: #333;
         }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            transition: background 0.3s, color 0.3s;
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; padding: 15px; transition: 0.3s; }
+        .container { max-width: 900px; margin: auto; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        
+        /* 輸入面板 */
+        .input-panel {
+            background: var(--card); padding: 20px; border-radius: 12px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px;
         }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        input { padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); }
+        
+        button { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-add { background: var(--primary); color: white; grid-column: span 1; }
+        .btn-theme { background: #6c757d; color: white; }
 
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-
-        .input-section {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        input, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            background: var(--card-bg);
-            color: var(--text-color);
-            box-sizing: border-box;
-        }
-
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: opacity 0.2s;
-        }
-
-        #saveBtn { background-color: var(--primary-color); color: white; }
-        #themeToggle { background-color: #888; color: white; }
-        button:hover { opacity: 0.8; }
-
-        .note-card {
-            background: var(--card-bg);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            position: relative;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border-left: 5px solid var(--primary-color);
-        }
-
-        .note-card h3 { margin-top: 0; margin-right: 30px; }
-        .note-card p { white-space: pre-wrap; margin-bottom: 0; }
-        .delete-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            color: var(--accent-color);
-            cursor: pointer;
-            font-size: 1.2rem;
-        }
+        /* 表格樣式 */
+        .table-container { background: var(--card); border-radius: 12px; overflow-x: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: rgba(0,0,0,0.03); font-size: 0.9rem; }
+        
+        .highlight-best { background: rgba(40, 167, 69, 0.15); color: var(--success); font-weight: bold; }
+        .unit-price-tag { color: var(--danger); font-weight: bold; }
+        .delete-btn { color: var(--danger); cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>📓 純前端筆記本</h1>
-        <button id="themeToggle">切換深色模式</button>
+        <h1>📊 比價助手 <small>V3.6.1</small></h1>
+        <button class="btn-theme" id="themeBtn">切換模式預覽</button>
     </header>
 
-    <div class="input-section">
-        <input type="text" id="noteTitle" placeholder="輸入標題...">
-        <textarea id="noteContent" rows="4" placeholder="開始寫點什麼..."></textarea>
-        <button id="saveBtn">儲存到資料庫</button>
+    <div class="input-panel">
+        <div class="input-group">
+            <label>商品名稱</label>
+            <input type="text" id="pName" placeholder="例如：衛生紙">
+        </div>
+        <div class="input-group">
+            <label>商店/來源</label>
+            <input type="text" id="pShop" placeholder="例如：好市多">
+        </div>
+        <div class="input-group">
+            <label>總價格 (TWD)</label>
+            <input type="number" id="pPrice" placeholder="0">
+        </div>
+        <div class="input-group">
+            <label>數量 (如:克/抽/入)</label>
+            <input type="number" id="pQty" placeholder="1">
+        </div>
+        <div class="input-group" style="justify-content: flex-end;">
+            <button class="btn-add" id="addBtn">新增比價項目</button>
+        </div>
     </div>
 
-    <div id="noteList">
-        </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>商品</th>
+                    <th>商店</th>
+                    <th>規格數量</th>
+                    <th>總價</th>
+                    <th>單位售價 (▼)</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="dataBody">
+                </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-    /**
-     * 1. IndexedDB 核心邏輯
-     */
-    const DB_NAME = 'NoteAppDB';
-    const DB_VERSION = 1;
-    const STORE_NAME = 'notes';
+    /** 1. IndexedDB 核心模組 **/
+    const DB_NAME = 'PriceMasterV3';
+    const STORE_NAME = 'records';
 
     function initDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                }
+        return new Promise((resolve) => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = (e) => {
+                e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
             };
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject('資料庫開啟失敗');
+            req.onsuccess = () => resolve(req.result);
         });
     }
 
-    async function addNote(title, content) {
+    async function dbAction(type, data = null) {
         const db = await initDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        store.add({ title, content, timestamp: new Date() });
-        return new Promise(resolve => tx.oncomplete = resolve);
+        return new Promise((resolve) => {
+            let req = (type === 'add') ? store.add(data) : (type === 'del') ? store.delete(data) : store.getAll();
+            req.onsuccess = () => resolve(req.result);
+        });
     }
 
-    async function getNotes() {
-        const db = await initDB();
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
-        return new Promise(resolve => request.onsuccess = () => resolve(request.result));
+    /** 2. UI 邏輯與計算 **/
+    const dataBody = document.getElementById('dataBody');
+
+    async function refreshUI() {
+        let items = await dbAction('get');
+        
+        // 核心邏輯：計算單價並排序
+        // 單價 = 總價 / 數量
+        items = items.map(item => ({
+            ...item,
+            unitPrice: (item.price / item.qty).toFixed(4)
+        })).sort((a, b) => a.unitPrice - b.unitPrice);
+
+        const minUnitPrice = items.length > 0 ? Math.min(...items.map(i => i.unitPrice)) : 0;
+
+        dataBody.innerHTML = items.map(item => `
+            <tr class="${item.unitPrice == minUnitPrice && items.length > 1 ? 'highlight-best' : ''}">
+                <td>${item.name}</td>
+                <td>${item.shop}</td>
+                <td>${item.qty}</td>
+                <td>$${Number(item.price).toLocaleString()}</td>
+                <td class="unit-price-tag">$${item.unitPrice}</td>
+                <td><span class="delete-btn" onclick="removeItem(${item.id})">❌ 刪除</span></td>
+            </tr>
+        `).join('');
     }
 
-    async function deleteNote(id) {
-        const db = await initDB();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.delete(id);
-        return new Promise(resolve => tx.oncomplete = resolve);
-    }
+    document.getElementById('addBtn').addEventListener('click', async () => {
+        const name = document.getElementById('pName').value || '未命名商品';
+        const shop = document.getElementById('pShop').value || '未知商店';
+        const price = parseFloat(document.getElementById('pPrice').value);
+        const qty = parseFloat(document.getElementById('pQty').value) || 1;
 
-    /**
-     * 2. UI 操作與 LocalStorage (主題設定)
-     */
-    const themeBtn = document.getElementById('themeToggle');
-    const saveBtn = document.getElementById('saveBtn');
-    const noteList = document.getElementById('noteList');
+        if (isNaN(price)) return alert('請輸入有效價格');
 
-    // 讀取 LocalStorage 設定
-    if (localStorage.getItem('darkMode') === 'enabled') {
-        document.body.classList.add('dark-mode');
-    }
-
-    // 切換模式並存入 LocalStorage
-    themeBtn.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-        if (document.body.classList.contains('dark-mode')) {
-            localStorage.setItem('darkMode', 'enabled');
-        } else {
-            localStorage.setItem('darkMode', 'disabled');
-        }
+        await dbAction('add', { name, shop, price, qty, time: new Date() });
+        // 清空輸入
+        ['pName', 'pShop', 'pPrice', 'pQty'].forEach(id => document.getElementById(id).value = '');
+        refreshUI();
     });
 
-    // 渲染筆記列表
-    async function render() {
-        const notes = await getNotes();
-        noteList.innerHTML = notes.map(n => `
-            <div class="note-card">
-                <span class="delete-btn" onclick="handleDelete(${n.id})">🗑️</span>
-                <h3>${n.title || '無標題'}</h3>
-                <p>${n.content}</p>
-            </div>
-        `).reverse().join('');
-    }
-
-    // 儲存按鈕點擊
-    saveBtn.addEventListener('click', async () => {
-        const title = document.getElementById('noteTitle').value;
-        const content = document.getElementById('noteContent').value;
-        
-        if (!content) return alert('內容不能為空');
-        
-        await addNote(title, content);
-        document.getElementById('noteTitle').value = '';
-        document.getElementById('noteContent').value = '';
-        render();
-    });
-
-    // 刪除處理 (掛載到 window 以便 onclick 調用)
-    window.handleDelete = async (id) => {
-        if (confirm('確定要刪除這條筆記嗎？')) {
-            await deleteNote(id);
-            render();
+    window.removeItem = async (id) => {
+        if (confirm('確定要移除此紀錄？')) {
+            await dbAction('del', id);
+            refreshUI();
         }
     };
 
-    // 網頁開啟時首次渲染
-    render();
+    /** 3. LocalStorage 主題控制 **/
+    const themeBtn = document.getElementById('themeBtn');
+    if (localStorage.getItem('v3_theme') === 'dark') document.body.classList.add('dark-mode');
+
+    themeBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('v3_theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+    });
+
+    refreshUI();
 </script>
 
 </body>
