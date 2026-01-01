@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>旗艦比價助手 V3.6.5 🔒</title>
+    <title>旗艦比價助手 V3.6.5 - Lai Ade 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding:15px; display:flex; justify-content:center; color:#333; }
-        .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; }
+        .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; position: relative; }
         
+        /* 🎨 設計者標註 */
+        .designer-tag { position: absolute; top: 12px; left: 15px; font-size: 10px; color: #bbb; letter-spacing: 0.5px; }
+
         /* ⚡ 即時比價面板樣式 */
         #compPanel { background: #fff7e6; border: 1px solid #ffd591; border-radius: 15px; padding: 12px; margin-bottom: 15px; display: none; }
         .comp-title { font-size: 13px; color: #d46b08; font-weight: bold; margin-bottom: 8px; }
@@ -55,7 +58,8 @@
 <div id="lightbox" onclick="this.style.display='none'"><img id="lightbox-img" src=""></div>
 
 <div class="container">
-    <h2 style="text-align:center; color:var(--primary); margin:0 0 15px 0;">🛒 旗艦比價助手 V3.6.5</h2>
+    <div class="designer-tag">設計者：Lai Ade</div>
+    <h2 style="text-align:center; color:var(--primary); margin:10px 0 15px 0;">🛒 旗艦比價助手 V3.6.5</h2>
 
     <div id="compPanel">
         <div class="comp-title">🔍 歷史比價參考：</div>
@@ -93,6 +97,7 @@
 </div>
 
 <script>
+// --- V3.6.5 核心邏輯保持不變 ---
 let storeData = {}; 
 let unitList = [];
 let currentPhotos = [null, null, null];
@@ -100,23 +105,17 @@ let editingTarget = null;
 let currentSlotIndex = 0;
 const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)","公斤(kg)"];
 
-// --- ⚡ 核心功能：即時比價 ---
 function liveCompare() {
     const name = document.getElementById('itemName').value.trim();
     const panel = document.getElementById('compPanel');
     const list = document.getElementById('compList');
-    
     if (name.length < 1) { panel.style.display = 'none'; return; }
-
     let matches = [];
     Object.keys(storeData).forEach(store => {
         storeData[store].forEach(item => {
-            if (item.name.toLowerCase().includes(name.toLowerCase())) {
-                matches.push({ store, ...item });
-            }
+            if (item.name.toLowerCase().includes(name.toLowerCase())) matches.push({ store, ...item });
         });
     });
-
     if (matches.length > 0) {
         matches.sort((a, b) => a.unitPrice - b.unitPrice);
         panel.style.display = 'block';
@@ -126,12 +125,9 @@ function liveCompare() {
                 <span class="${i===0?'comp-best':''}">$${m.unitPrice} / ${m.unit}</span>
             </div>
         `).join('');
-    } else {
-        panel.style.display = 'none';
-    }
+    } else { panel.style.display = 'none'; }
 }
 
-// --- 📏 核心功能：單價計算 ---
 function updateCalculation() {
     const p = parseFloat(document.getElementById('price').value) || 0;
     const c = parseFloat(document.getElementById('count').value) || 1;
@@ -139,21 +135,17 @@ function updateCalculation() {
     document.getElementById('calcResult').innerText = p > 0 ? `$${(p/c).toFixed(2)} / ${u}` : `-- / 單位`;
 }
 
-// --- 💾 儲存與分頁 ---
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類";
     const name = document.getElementById('itemName').value.trim();
     const price = parseFloat(document.getElementById('price').value);
     const count = parseFloat(document.getElementById('count').value) || 1;
     const unit = document.getElementById('unitSelect').value;
-
     if (!name || isNaN(price)) return alert("請填寫品名與價格");
-
     if (editingTarget) {
         storeData[editingTarget.store].splice(editingTarget.index, 1);
         if (storeData[editingTarget.store].length === 0) delete storeData[editingTarget.store];
     }
-
     if (!storeData[store]) storeData[store] = [];
     storeData[store].push({
         name, price, count, unit,
@@ -161,7 +153,6 @@ function saveRecord() {
         photos: currentPhotos.filter(p => p !== null),
         date: new Date().toLocaleDateString()
     });
-
     localStorage.setItem('storeTabsData', JSON.stringify(storeData));
     editingTarget = null;
     currentPhotos = [null, null, null];
@@ -175,18 +166,11 @@ function renderTabs(activeStore = null) {
     const contents = document.getElementById('tab-contents');
     const ctrl = document.getElementById('tab-controls');
     const stores = Object.keys(storeData);
-
-    if (stores.length === 0) {
-        headers.innerHTML = ""; contents.innerHTML = "尚無紀錄"; ctrl.style.display="none";
-        return;
-    }
-
+    if (stores.length === 0) { headers.innerHTML = ""; contents.innerHTML = "尚無紀錄"; ctrl.style.display="none"; return; }
     const currentStore = activeStore || stores[0];
     ctrl.style.display = "block";
     document.getElementById('delStoreBtn').onclick = () => deleteStore(currentStore);
-
     headers.innerHTML = stores.map(s => `<div class="tab-btn ${s===currentStore?'active':''}" onclick="renderTabs('${s}')">${s}</div>`).join('');
-    
     contents.innerHTML = storeData[currentStore].slice().reverse().map((r, i) => {
         const idx = storeData[currentStore].length - 1 - i;
         return `
@@ -204,7 +188,6 @@ function renderTabs(activeStore = null) {
     `}).join('');
 }
 
-// --- 🛠️ 編輯、刪除、單位管理 ---
 function editItem(store, index) {
     const item = storeData[store][index];
     document.getElementById('storeName').value = store;
@@ -240,15 +223,6 @@ function deleteStore(store) {
     }
 }
 
-function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("新單位:"); if(n){ unitList.push(n); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n); } } }
-
-function refreshUnitSelect(target=null) {
-    const sel = document.getElementById('unitSelect');
-    const combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList]));
-    sel.innerHTML = combined.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增</option>`;
-}
-
-// --- 📸 照片處理 ---
 function triggerFile(index) { currentSlotIndex = index; document.getElementById('file-input').click(); }
 async function handleFile(input) {
     if (!input.files[0]) return;
@@ -258,6 +232,7 @@ async function handleFile(input) {
     if(currentSlotIndex === 0) performOCR(input.files[0]);
     input.value = "";
 }
+
 function compressImage(file) {
     return new Promise(res => {
         const reader = new FileReader();
@@ -278,11 +253,21 @@ function compressImage(file) {
         };
     });
 }
+
 function renderPhotoSlots() {
     currentPhotos.forEach((data, i) => {
         document.getElementById(`slot-${i}`).innerHTML = data ? `<img src="${data}"><div class="remove-p" onclick="event.stopPropagation();currentPhotos[${i}]=null;renderPhotoSlots()">×</div>` : `+`;
     });
 }
+
+function refreshUnitSelect(target=null) {
+    const sel = document.getElementById('unitSelect');
+    const combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList]));
+    sel.innerHTML = combined.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增</option>`;
+}
+
+function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("新單位:"); if(n){ unitList.push(n); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n); } } }
+
 function openLightbox(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').style.display = 'flex'; }
 
 async function performOCR(file) {
