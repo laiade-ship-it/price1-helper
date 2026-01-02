@@ -7,12 +7,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="比價助手">
     
-    <title>旗艦比價助手 V3.6.8 - Lai Ade 🔒</title>
+    <title>旗艦比價助手 V3.6.9 - Lai Ade 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
         
-        /* 2. 修改：適配 iPhone 頂部與底部安全區 */
         body { 
             font-family: -apple-system, "Noto Sans TC", sans-serif; 
             background: var(--bg); margin:0; 
@@ -60,7 +59,7 @@
         .btn-edit { color: var(--primary); cursor: pointer; font-size: 13px; font-weight: bold; }
         .btn-delete { color: var(--danger); cursor: pointer; font-size: 13px; }
 
-        /* 3. 修改：強化版 iPhone 專用 Lightbox */
+        /* iPhone 專用 Lightbox */
         #lightbox { 
             display: none; position: fixed; inset: 0; 
             background: rgba(0,0,0,0.95); z-index: 9999; 
@@ -74,6 +73,12 @@
             width: 44px; height: 44px; border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
         }
+
+        /* 新增：功能按鈕組 */
+        .tab-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+        .action-small { font-size: 12px; cursor: pointer; font-weight: bold; padding: 5px 10px; border-radius: 8px; }
+        .btn-rename { color: var(--primary); background: #e6f7ff; }
+        .btn-del-store { color: var(--danger); background: #fff1f0; }
     </style>
 </head>
 <body>
@@ -84,7 +89,7 @@
 </div>
 
 <div class="container">
-    <div class="designer-tag">設計者：Lai Ade | V3.6.8</div>
+    <div class="designer-tag">設計者：Lai Ade | V3.6.9</div>
     <h2 style="text-align:center; color:var(--primary); margin:10px 0 15px 0;">🛒 旗艦比價助手</h2>
 
     <div id="compPanel">
@@ -112,13 +117,18 @@
         <div class="input-group" style="flex:1;"><label>🔢 數量</label><input type="number" id="count" value="1" oninput="updateCalculation()" inputmode="decimal"></div>
         <div class="input-group" style="flex:1.2;"><label>📏 單位</label><select id="unitSelect" onchange="handleUnitChange(this); updateCalculation()"></select></div>
     </div>
+
+    <div class="input-group"><label>📅 購買日期</label><input type="date" id="purchaseDate"></div>
+    
     <div class="input-group"><label>📝 備註</label><textarea id="itemMemo"></textarea></div>
 
     <button class="btn-save" id="btnSave" onclick="saveRecord()">✅ 儲存此紀錄</button>
 
-    <div id="tab-controls" style="text-align:right; margin-top:15px; display:none;">
-        <small id="delStoreBtn" style="color:var(--danger); cursor:pointer; font-weight:bold; background:#fff1f0; padding:4px 8px; border-radius:8px;">🗑️ 刪除整個商店</small>
+    <div id="tab-controls" class="tab-actions" style="display:none;">
+        <span id="renameStoreBtn" class="action-small btn-rename">✏️ 重新命名商店</span>
+        <span id="delStoreBtn" class="action-small btn-del-store">🗑️ 刪除商店</span>
     </div>
+    
     <div id="tab-headers" class="tab-headers"></div>
     <div id="tab-contents"></div>
 </div>
@@ -131,7 +141,7 @@ let editingTarget = null;
 let currentSlotIndex = 0;
 const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)"];
 
-// --- ⚡ 保留：強化比價與跳轉功能 ---
+// --- ⚡ 保留核心功能：比價與跳轉 ---
 function liveCompare() {
     const name = document.getElementById('itemName').value.trim();
     const panel = document.getElementById('compPanel');
@@ -170,25 +180,17 @@ function jumpToRecord(store, idx) {
     }, 300);
 }
 
-// --- 📸 修正：iPhone 專用 Lightbox 邏輯 ---
+// --- 📸 圖片與 OCR 功能 ---
 function openLightbox(src) {
     const lb = document.getElementById('lightbox');
     document.getElementById('lightbox-img').src = src;
     lb.style.display = 'flex';
-    document.body.style.overflow = 'hidden'; // 禁止背景滾動
+    document.body.style.overflow = 'hidden';
 }
 
 function closeLightbox() {
     document.getElementById('lightbox').style.display = 'none';
-    document.body.style.overflow = ''; // 恢復滾動
-}
-
-// --- 🛠️ 核心功能模組 ---
-function updateCalculation() {
-    const p = parseFloat(document.getElementById('price').value) || 0;
-    const c = parseFloat(document.getElementById('count').value) || 1;
-    const u = document.getElementById('unitSelect').value;
-    document.getElementById('calcResult').innerText = p > 0 ? `$${(p/c).toFixed(2)} / ${u}` : `-- / 單位`;
+    document.body.style.overflow = '';
 }
 
 function triggerFile(index) {
@@ -213,7 +215,7 @@ function compressImage(file) {
             const img = new Image(); img.src = e.target.result;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const max = 800; // 提升壓縮解析度以利放大
+                const max = 800;
                 let w = img.width, h = img.height;
                 if (w > h) { if(w > max){ h *= max/w; w = max; } } 
                 else { if(h > max){ w *= max/h; h = max; } }
@@ -240,6 +242,7 @@ async function performOCR(file) {
     await worker.terminate();
 }
 
+// --- 💾 數據處理與儲存 ---
 function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類";
     const name = document.getElementById('itemName').value.trim();
@@ -247,6 +250,8 @@ function saveRecord() {
     const count = parseFloat(document.getElementById('count').value) || 1;
     const unit = document.getElementById('unitSelect').value;
     const memo = document.getElementById('itemMemo').value.trim();
+    const date = document.getElementById('purchaseDate').value; // 獲取自定義日期
+
     if (!name || isNaN(price)) return alert("請填寫品名與價格");
     
     if (editingTarget) {
@@ -259,7 +264,7 @@ function saveRecord() {
         name, price, count, unit, memo,
         unitPrice: (price / count).toFixed(2),
         photos: currentPhotos.filter(p => p !== null),
-        date: new Date().toLocaleDateString()
+        date: date // 儲存日期
     });
     
     localStorage.setItem('storeTabsData', JSON.stringify(storeData));
@@ -276,8 +281,11 @@ function renderTabs(activeStore = null) {
     if (stores.length === 0) { headers.innerHTML = ""; contents.innerHTML = "尚無紀錄"; ctrl.style.display="none"; return; }
     
     const currentStore = activeStore || stores[0];
-    ctrl.style.display = "block";
+    ctrl.style.display = "flex";
+    
+    // 綁定管理功能
     document.getElementById('delStoreBtn').onclick = () => deleteStore(currentStore);
+    document.getElementById('renameStoreBtn').onclick = () => renameStore(currentStore);
     
     headers.innerHTML = stores.map(s => `<div class="tab-btn ${s===currentStore?'active':''}" onclick="renderTabs('${s}')">${s}</div>`).join('');
     
@@ -289,6 +297,7 @@ function renderTabs(activeStore = null) {
                 <b style="flex:1">${r.name}</b>
                 <span style="color:var(--primary); font-weight:bold; text-align:right;">$${r.price}<br><small style="color:#999">($${r.unitPrice}/${r.unit})</small></span>
             </div>
+            <div style="font-size:11px; color:#aaa; margin: 4px 0;">📅 購買日期：${r.date || '未標記'}</div>
             ${r.memo ? `<div class="record-memo">${r.memo}</div>` : ''}
             <div class="record-photos">${r.photos.map(p => `<img src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>
             <div class="action-links">
@@ -298,7 +307,22 @@ function renderTabs(activeStore = null) {
         </div>`}).join('');
 }
 
-// 輔助功能
+// --- 📂 商店管理功能 ---
+function renameStore(oldName) {
+    const newName = prompt("請輸入新的商店名稱：", oldName);
+    if (!newName || newName.trim() === "" || newName === oldName) return;
+    if (storeData[newName.trim()]) return alert("該商店名稱已存在！");
+
+    storeData[newName.trim()] = storeData[oldName];
+    delete storeData[oldName];
+    
+    localStorage.setItem('storeTabsData', JSON.stringify(storeData));
+    renderTabs(newName.trim());
+}
+
+function deleteStore(store) { if (confirm(`確定刪除整間「${store}」商店及其所有紀錄？`)) { delete storeData[store]; localStorage.setItem('storeTabsData', JSON.stringify(storeData)); renderTabs(); } }
+
+// --- 🛠️ 輔助功能 ---
 function editItem(store, index) {
     const item = storeData[store][index];
     document.getElementById('storeName').value = store;
@@ -306,6 +330,8 @@ function editItem(store, index) {
     document.getElementById('price').value = item.price;
     document.getElementById('count').value = item.count;
     document.getElementById('itemMemo').value = item.memo || "";
+    document.getElementById('purchaseDate').value = item.date || ""; // 載入日期
+    
     refreshUnitSelect(item.unit);
     currentPhotos = [null, null, null];
     if (item.photos) item.photos.forEach((p, i) => currentPhotos[i] = p);
@@ -316,15 +342,26 @@ function editItem(store, index) {
     updateCalculation(); window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
-function deleteItem(store, index) { if (confirm("確定刪除？")) { storeData[store].splice(index, 1); if (storeData[store].length === 0) delete storeData[store]; localStorage.setItem('storeTabsData', JSON.stringify(storeData)); renderTabs(); } }
-function deleteStore(store) { if (confirm(`確定刪除「${store}」？`)) { delete storeData[store]; localStorage.setItem('storeTabsData', JSON.stringify(storeData)); renderTabs(); } }
+function updateCalculation() {
+    const p = parseFloat(document.getElementById('price').value) || 0;
+    const c = parseFloat(document.getElementById('count').value) || 1;
+    const u = document.getElementById('unitSelect').value;
+    document.getElementById('calcResult').innerText = p > 0 ? `$${(p/c).toFixed(2)} / ${u}` : `-- / 單位`;
+}
+
+function deleteItem(store, index) { if (confirm("確定刪除此紀錄？")) { storeData[store].splice(index, 1); if (storeData[store].length === 0) delete storeData[store]; localStorage.setItem('storeTabsData', JSON.stringify(storeData)); renderTabs(); } }
+
 function refreshUnitSelect(target=null) {
     const sel = document.getElementById('unitSelect');
     const combined = Array.from(new Set([...DEFAULT_UNITS, ...unitList]));
     sel.innerHTML = combined.map(u => `<option value="${u}" ${u===target?'selected':''}>${u}</option>`).join('') + `<option value="ADD_NEW">➕ 新增</option>`;
 }
+
 function handleUnitChange(sel) { if(sel.value==="ADD_NEW"){ const n=prompt("新單位:"); if(n){ unitList.push(n); localStorage.setItem('managedUnits', JSON.stringify(unitList)); refreshUnitSelect(n); } } }
+
 function resetForm() {
+    const today = new Date().toISOString().split('T')[0]; // 自動獲取今天日期
+    document.getElementById('purchaseDate').value = today;
     document.getElementById('itemName').value = ""; document.getElementById('price').value = "";
     document.getElementById('count').value = "1"; document.getElementById('itemMemo').value = "";
     document.getElementById('btnSave').innerText = "✅ 儲存此紀錄";
@@ -335,7 +372,9 @@ function resetForm() {
 window.onload = () => {
     storeData = JSON.parse(localStorage.getItem('storeTabsData')) || {};
     unitList = JSON.parse(localStorage.getItem('managedUnits')) || [];
-    refreshUnitSelect(); renderTabs();
+    refreshUnitSelect(); 
+    resetForm(); // 初始化日期
+    renderTabs();
 };
 </script>
 </body>
