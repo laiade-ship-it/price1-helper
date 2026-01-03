@@ -7,18 +7,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="比價助手">
     
-    <title>旗艦比價助手 V3.7.2 - 空間監測版 📊</title>
+    <title>旗艦比價助手 V3.8.0 - 備份專家版 💾</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
+        :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; --secondary: #6c757d; }
         body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: var(--bg); margin:0; padding: env(safe-area-inset-top) 15px env(safe-area-inset-bottom) 15px; display:flex; justify-content:center; color:#333; }
         .container { width:100%; max-width:480px; background:var(--card); padding:20px; border-radius:24px; box-shadow:0 10px 30px rgba(0,0,0,0.08); box-sizing:border-box; position: relative; }
         .designer-tag { position: absolute; top: 12px; left: 15px; font-size: 10px; color: #bbb; letter-spacing: 0.5px; }
         
-        /* 🚀 新增：空間顯示樣式 */
-        .storage-info { font-size: 11px; color: #999; text-align: center; margin-bottom: 10px; background: #f0f0f0; border-radius: 20px; padding: 4px 10px; display: inline-block; width: fit-content; margin-left: auto; margin-right: auto; display: block; }
-        .storage-bar-bg { width: 100%; height: 4px; background: #eee; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+        /* 空間與備份區 */
+        .status-zone { background: #f0f2f5; border-radius: 16px; padding: 12px; margin-bottom: 15px; text-align: center; }
+        .storage-info { font-size: 11px; color: #777; margin-bottom: 8px; }
+        .storage-bar-bg { width: 100%; height: 4px; background: #ddd; border-radius: 2px; margin-top: 4px; overflow: hidden; }
         .storage-bar-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.5s; }
+        
+        .backup-btns { display: flex; gap: 8px; margin-top: 10px; }
+        .btn-backup { flex: 1; padding: 8px; font-size: 12px; border-radius: 8px; border: 1px solid #ddd; background: white; cursor: pointer; font-weight: bold; color: #555; display: flex; align-items: center; justify-content: center; gap: 4px; }
+        .btn-backup:active { background: #eee; }
 
         #compPanel { background: #fff7e6; border: 1px solid #ffd591; border-radius: 15px; padding: 12px; margin-bottom: 15px; display: none; }
         .comp-title { font-size: 13px; color: #d46b08; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; }
@@ -64,12 +69,17 @@
 </div>
 
 <div class="container">
-    <div class="designer-tag">設計者：Lai Ade | V3.7.2 (空間監測版)</div>
+    <div class="designer-tag">設計者：Lai Ade | V3.8.0 (備份版)</div>
     <h2 style="text-align:center; color:var(--primary); margin:10px 0 5px 0;">🛒 旗艦比價助手</h2>
 
-    <div class="storage-info" id="storagePanel">
-        🔄 正在計算空間...
+    <div class="status-zone">
+        <div class="storage-info" id="storagePanel">💾 空間檢查中...</div>
         <div class="storage-bar-bg"><div class="storage-bar-fill" id="storageBar"></div></div>
+        <div class="backup-btns">
+            <div class="btn-backup" onclick="exportData()">📥 匯出備份</div>
+            <div class="btn-backup" onclick="document.getElementById('importFile').click()">📤 匯入還原</div>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
     </div>
 
     <div id="compPanel">
@@ -122,32 +132,67 @@ let editingTarget = null;
 let currentSlotIndex = 0;
 const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)"];
 
-// --- 🚀 新增：檢查剩餘空間函數 ---
+// --- 📦 備份核心功能 ---
+async function exportData() {
+    const backup = {
+        storeTabsData: storeData,
+        managedUnits: unitList,
+        version: "3.8.0",
+        exportDate: new Date().toLocaleString()
+    };
+    const blob = new Blob([JSON.stringify(backup)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `比價助手備份_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function importData(input) {
+    if (!input.files[0]) return;
+    if (!confirm("⚠️ 匯入將會覆蓋目前手機內的紀錄，確定繼續？")) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (data.storeTabsData) {
+                storeData = data.storeTabsData;
+                unitList = data.managedUnits || [];
+                await dbSaveData('storeTabsData', storeData);
+                await dbSaveData('managedUnits', unitList);
+                alert("✅ 還原成功！");
+                location.reload(); // 重新整理頁面載入新資料
+            } else {
+                alert("❌ 無效的備份檔案格式");
+            }
+        } catch (err) {
+            alert("❌ 讀取檔案失敗");
+        }
+    };
+    reader.readAsText(input.files[0]);
+}
+
+// --- 空間檢查 ---
 async function updateStorageInfo() {
     if (navigator.storage && navigator.storage.estimate) {
-        try {
-            const estimate = await navigator.storage.estimate();
-            const usageMB = (estimate.usage / (1024 * 1024)).toFixed(2);
-            const quotaMB = (estimate.quota / (1024 * 1024)).toFixed(0);
-            const percent = ((estimate.usage / estimate.quota) * 100).toFixed(1);
-            
-            document.getElementById('storagePanel').innerHTML = 
-                `💾 已用 ${usageMB} MB / 配額 ${quotaMB} MB (${percent}%)` +
-                `<div class="storage-bar-bg"><div class="storage-bar-fill" style="width: ${percent}%"></div></div>`;
-        } catch (e) { console.error("無法取得空間數據", e); }
-    } else {
-        document.getElementById('storagePanel').innerText = "⚠️ 瀏覽器不支援空間偵測";
+        const est = await navigator.storage.estimate();
+        const usageMB = (est.usage / (1024 * 1024)).toFixed(2);
+        const quotaMB = (est.quota / (1024 * 1024)).toFixed(0);
+        const percent = ((est.usage / est.quota) * 100).toFixed(1);
+        document.getElementById('storagePanel').innerText = `已用 ${usageMB} MB / 配額 ${quotaMB} MB`;
+        document.getElementById('storageBar').style.width = `${percent}%`;
     }
 }
 
+// --- IndexedDB ---
 function initDB() {
     return new Promise((resolve) => {
         const request = indexedDB.open(DB_NAME, 1);
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME);
-            }
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
         };
         request.onsuccess = (e) => resolve(e.target.result);
     });
@@ -167,22 +212,9 @@ async function dbSaveData(key, value) {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
     tx.objectStore(STORE_NAME).put(value, key);
-    updateStorageInfo(); // 每次存檔更新空間
 }
 
-async function migrateData() {
-    const oldStoreData = localStorage.getItem('storeTabsData');
-    const oldUnits = localStorage.getItem('managedUnits');
-    if (oldStoreData) {
-        await dbSaveData('storeTabsData', JSON.parse(oldStoreData));
-        localStorage.removeItem('storeTabsData');
-    }
-    if (oldUnits) {
-        await dbSaveData('managedUnits', JSON.parse(oldUnits));
-        localStorage.removeItem('managedUnits');
-    }
-}
-
+// --- UI 與 比價邏輯 ---
 function liveCompare() {
     const name = document.getElementById('itemName').value.trim();
     const panel = document.getElementById('compPanel');
@@ -224,9 +256,8 @@ function jumpToRecord(store, idx) {
 function openLightbox(src) {
     document.getElementById('lightbox-img').src = src;
     document.getElementById('lightbox').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
 }
-function closeLightbox() { document.getElementById('lightbox').style.display = 'none'; document.body.style.overflow = ''; }
+function closeLightbox() { document.getElementById('lightbox').style.display = 'none'; }
 function triggerFile(index) { currentSlotIndex = index; document.getElementById('file-input').click(); }
 
 async function handleFile(input) {
@@ -300,6 +331,7 @@ async function saveRecord() {
     editingTarget = null;
     currentPhotos = [null, null, null];
     renderPhotoSlots(); resetForm(); renderTabs(store);
+    updateStorageInfo();
 }
 
 function renderTabs(activeStore = null) {
@@ -345,14 +377,13 @@ async function renameStore(oldName) {
 }
 
 async function deleteStore(store) { if (confirm(`確定刪除「${store}」？`)) { delete storeData[store]; await dbSaveData('storeTabsData', storeData); renderTabs(); updateStorageInfo(); } }
-
 async function deleteItem(store, index) { 
     if (confirm("確定刪除？")) { 
         storeData[store].splice(index, 1); 
         if (storeData[store].length === 0) delete storeData[store]; 
         await dbSaveData('storeTabsData', storeData); 
         renderTabs(store);
-        updateStorageInfo(); // 刪除後更新空間
+        updateStorageInfo();
     } 
 }
 
@@ -395,17 +426,12 @@ function resetForm() {
     document.getElementById('count').value = "1"; document.getElementById('itemMemo').value = "";
     document.getElementById('btnSave').innerText = "✅ 儲存此紀錄";
     document.getElementById('btnSave').style.background = "var(--success)";
-    document.getElementById('compPanel').style.display = 'none';
 }
 
 window.onload = async () => {
-    await migrateData();
     storeData = await dbGetData('storeTabsData') || {};
     unitList = await dbGetData('managedUnits') || [];
-    refreshUnitSelect(); 
-    resetForm();
-    renderTabs();
-    updateStorageInfo(); // 初始載入時檢查空間
+    refreshUnitSelect(); resetForm(); renderTabs(); updateStorageInfo();
 };
 </script>
 </body>
