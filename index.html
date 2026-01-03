@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="比價助手">
     
-    <title>旗艦比價助手 V3.7.0 - 大容量版 🔒</title>
+    <title>旗艦比價助手 V3.7.1 - 穩定版 🔒</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f8f9fa; --card: #ffffff; --success: #27ae60; --danger: #ff4d4f; --warning: #f1c40f; }
@@ -58,7 +58,7 @@
 </div>
 
 <div class="container">
-    <div class="designer-tag">設計者：Lai Ade | V3.7.0 (大容量)</div>
+    <div class="designer-tag">設計者：Lai Ade | V3.7.1 (大容量)</div>
     <h2 style="text-align:center; color:var(--primary); margin:10px 0 15px 0;">🛒 旗艦比價助手</h2>
 
     <div id="compPanel">
@@ -112,7 +112,6 @@ let editingTarget = null;
 let currentSlotIndex = 0;
 const DEFAULT_UNITS = ["入","個","克(g)","毫升(ml)","包","瓶","公升(L)"];
 
-// 初始化資料庫
 function initDB() {
     return new Promise((resolve) => {
         const request = indexedDB.open(DB_NAME, 1);
@@ -142,15 +141,12 @@ async function dbSaveData(key, value) {
     tx.objectStore(STORE_NAME).put(value, key);
 }
 
-// --- 🚀 自動搬家邏輯：LocalStorage -> IndexedDB ---
 async function migrateData() {
     const oldStoreData = localStorage.getItem('storeTabsData');
     const oldUnits = localStorage.getItem('managedUnits');
-    
     if (oldStoreData) {
         await dbSaveData('storeTabsData', JSON.parse(oldStoreData));
         localStorage.removeItem('storeTabsData');
-        console.log("商店紀錄搬家成功");
     }
     if (oldUnits) {
         await dbSaveData('managedUnits', JSON.parse(oldUnits));
@@ -158,7 +154,6 @@ async function migrateData() {
     }
 }
 
-// --- ⚡ 核心比價邏輯 ---
 function liveCompare() {
     const name = document.getElementById('itemName').value.trim();
     const panel = document.getElementById('compPanel');
@@ -197,7 +192,6 @@ function jumpToRecord(store, idx) {
     }, 300);
 }
 
-// --- 📸 圖片處理 ---
 function openLightbox(src) {
     document.getElementById('lightbox-img').src = src;
     document.getElementById('lightbox').style.display = 'flex';
@@ -249,7 +243,6 @@ async function performOCR(file) {
     await worker.terminate();
 }
 
-// --- 💾 數據存取 ---
 async function saveRecord() {
     const store = document.getElementById('storeName').value.trim() || "未分類";
     const name = document.getElementById('itemName').value.trim();
@@ -294,7 +287,7 @@ function renderTabs(activeStore = null) {
     
     headers.innerHTML = stores.map(s => `<div class="tab-btn ${s===currentStore?'active':''}" onclick="renderTabs('${s}')">${s}</div>`).join('');
     
-    contents.innerHTML = storeData[currentStore].slice().reverse().map((r, i) => {
+    contents.innerHTML = storeData[currentStore] ? storeData[currentStore].slice().reverse().map((r, i) => {
         const actualIdx = storeData[currentStore].length - 1 - i;
         return `
         <div class="record-item" id="record-${currentStore}-${actualIdx}">
@@ -309,7 +302,7 @@ function renderTabs(activeStore = null) {
                 <span class="btn-edit" onclick="editItem('${currentStore}', ${actualIdx})">✏️ 編輯</span>
                 <span class="btn-delete" onclick="deleteItem('${currentStore}', ${actualIdx})">🗑️ 刪除</span>
             </div>
-        </div>`}).join('');
+        </div>`}).join('') : '';
 }
 
 async function renameStore(oldName) {
@@ -323,7 +316,16 @@ async function renameStore(oldName) {
 }
 
 async function deleteStore(store) { if (confirm(`確定刪除「${store}」？`)) { delete storeData[store]; await dbSaveData('storeTabsData', storeData); renderTabs(); } }
-async function deleteItem(store, index) { if (confirm("確定刪除？")) { storeData[store].splice(index, 1); if (storeData[store].length === 0) delete storeData[store]; await dbSaveData('storeTabsData', storeData); renderTabs(); } }
+
+// --- ✨ 重點修正處：刪除細項後傳入 store 名稱保持在原位 ---
+async function deleteItem(store, index) { 
+    if (confirm("確定刪除？")) { 
+        storeData[store].splice(index, 1); 
+        if (storeData[store].length === 0) delete storeData[store]; 
+        await dbSaveData('storeTabsData', storeData); 
+        renderTabs(store); // 帶入當前商店名稱，防止跳回第一個
+    } 
+}
 
 function editItem(store, index) {
     const item = storeData[store][index];
@@ -368,7 +370,7 @@ function resetForm() {
 }
 
 window.onload = async () => {
-    await migrateData(); // 搬家
+    await migrateData();
     storeData = await dbGetData('storeTabsData') || {};
     unitList = await dbGetData('managedUnits') || [];
     refreshUnitSelect(); 
